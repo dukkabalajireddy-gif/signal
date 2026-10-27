@@ -79,7 +79,7 @@ function Logo() {
           />
         </svg>
       </div>
-      <span className="text-[19px] font-semibold tracking-tight">BabbleBots.ai</span>
+      <span className="text-[19px] font-semibold tracking-tight">Signal</span>
     </div>
   );
 }
@@ -194,6 +194,11 @@ function Sidebar({
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="mt-4 flex items-center gap-1.5 border-t border-line px-1 pt-3 text-[11px] text-faint">
+        <span>for</span>
+        <span className="font-medium text-muted">BabbleBots.ai</span>
       </div>
     </aside>
   );

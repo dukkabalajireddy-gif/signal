@@ -51,17 +51,16 @@ export const LEAD_META: Record<Lead, { label: string; fg: string; bg: string }> 
   cold: { label: "Cold", fg: "#8fa6c6", bg: "rgba(143, 166, 198, 0.12)" },
 };
 
-// Placeholder tracks — swap with BabbleBots.ai's real 9 when shared.
+// BabbleBots.ai's 8 tracks. The 9th grid cell is the "Add track" card.
 export const TRACKS: Track[] = [
+  { id: "forward-deployed", name: "Forward Deployed Engineer" },
   { id: "ai-engineer", name: "AI Engineer" },
   { id: "full-stack", name: "Full Stack Engineer" },
-  { id: "llm-engineer", name: "LLM Engineer" },
-  { id: "ml-engineer", name: "ML Engineer" },
-  { id: "data-scientist", name: "Data Scientist" },
+  { id: "backend", name: "Backend Engineer" },
+  { id: "frontend", name: "Front-end Engineer" },
+  { id: "intern", name: "Software/AI Engineering Intern" },
   { id: "ai-pm", name: "AI Product Manager" },
-  { id: "mlops", name: "MLOps Engineer" },
-  { id: "nlp", name: "NLP Researcher" },
-  { id: "cv-engineer", name: "Computer Vision Engineer" },
+  { id: "gtm", name: "GTM Engineer" },
 ];
 
 const COMPANIES: [string, string][] = [
@@ -91,7 +90,9 @@ const SALARY_BANDS = [
   "₹40–60 LPA",
   "₹55–80 LPA",
 ];
+const STIPENDS = ["₹25–40k/mo", "₹40–60k/mo", "₹50–80k/mo"];
 const SENIORITY = ["", "Senior ", "Lead ", "Founding ", "Staff "];
+const isIntern = (name: string) => /intern/i.test(name);
 const PLATFORMS: Platform[] = ["naukri", "linkedin", "reddit", "x", "slack"];
 const LEADS: Lead[] = ["hot", "warm", "cold"];
 
@@ -131,8 +132,11 @@ function makeListing(track: Track, i: number, ageBase: number): Listing {
   const [company, size] = COMPANIES[ci];
   const platform = PLATFORMS[(i + track.name.length) % PLATFORMS.length];
   const lead = LEADS[(i + ci) % LEADS.length];
-  const salary = SALARY_BANDS[(i + ci) % SALARY_BANDS.length];
-  const role = SENIORITY[(i + ci) % SENIORITY.length] + track.name;
+  const intern = isIntern(track.name);
+  const salary = intern
+    ? STIPENDS[(i + ci) % STIPENDS.length]
+    : SALARY_BANDS[(i + ci) % SALARY_BANDS.length];
+  const role = intern ? track.name : SENIORITY[(i + ci) % SENIORITY.length] + track.name;
   return {
     id: `seed-${seedN++}`,
     trackId: track.id,
@@ -160,13 +164,14 @@ const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 export function makeLiveListing(track: Track): Listing {
   const [company, size] = pick(COMPANIES);
   const platform = pick(PLATFORMS);
+  const intern = isIntern(track.name);
   return {
     id: `live-${liveN++}`,
     trackId: track.id,
-    role: pick(SENIORITY) + track.name,
+    role: intern ? track.name : pick(SENIORITY) + track.name,
     company,
     companySize: size,
-    salary: pick(SALARY_BANDS),
+    salary: intern ? pick(STIPENDS) : pick(SALARY_BANDS),
     platform,
     sourceLabel: sourceLabel(platform, company),
     url: sourceUrl(platform),

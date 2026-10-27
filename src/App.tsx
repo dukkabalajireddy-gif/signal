@@ -352,12 +352,21 @@ function TrackDetail({
     <div className="mx-auto w-full max-w-4xl px-6 py-8 lg:px-10">
       {/* breadcrumb */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm">
-          <button onClick={onBack} className="text-muted transition-colors hover:text-text">
-            Tracks
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            aria-label="Back to tracks"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-sm text-muted transition-colors hover:border-lime/50 hover:text-text"
+          >
+            <span className="text-base leading-none">←</span> Back
           </button>
-          <span className="text-faint">›</span>
-          <span className="font-medium text-text">{track.name}</span>
+          <div className="flex items-center gap-2 text-sm">
+            <button onClick={onBack} className="text-muted transition-colors hover:text-text">
+              Tracks
+            </button>
+            <span className="text-faint">›</span>
+            <span className="font-medium text-text">{track.name}</span>
+          </div>
         </div>
         <div className="relative">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint">⌕</span>

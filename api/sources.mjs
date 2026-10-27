@@ -22,6 +22,20 @@ async function getJSON(url, ms = 11000) {
   }
 }
 
+async function getText(url, ms = 11000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, { headers: UA, signal: ctrl.signal });
+    if (!r.ok) return "";
+    return await r.text();
+  } catch {
+    return "";
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 // ── track + region classifiers ───────────────────────────────────────────────
 const hasEng = (t) => /\b(engineer|developer|sde|programmer)\b/i.test(t);
 export const LIVE_TRACKS = {
@@ -144,6 +158,48 @@ async function fromFrontline() {
   return out;
 }
 
+// Job Alerts Hub: WordPress with no API/RSS, but an open sitemap. The newest
+// post-sitemap holds current posts, and each URL slug encodes company + city +
+// role, so we build tech leads straight from the slug (no per-page fetch).
+const JAH_CITY = /^(bangalore|bengaluru|hyderabad|pune|chennai|mumbai|delhi|noida|gurgaon|gurugram|kolkata|ahmedabad|indore|coimbatore|kochi|cochin|trivandrum|thiruvananthapuram|jaipur|chandigarh|nagpur|vizag|visakhapatnam|bhubaneswar|mysore|mysuru|vadodara|surat|lucknow|bhopal|nashik|remote)$/;
+const JAH_FILLER = /^(posts?|jobs?|notifications?|recruitment|apply|online|vacancy|vacancies|oct|nov|dec|jan|feb|mar|apr|may|jun|jul|aug|sep|20\d\d|and|others?|for|the|a)$/i;
+function parseJAHSlug(slug) {
+  const toks = slug.split("-").filter((t) => t && !JAH_FILLER.test(t));
+  const cityIdx = toks.findIndex((t) => JAH_CITY.test(t));
+  if (cityIdx > 0) {
+    return { company: toks.slice(0, cityIdx).join(" "), city: toks[cityIdx], role: toks.slice(cityIdx + 1).join(" ") };
+  }
+  return { company: toks[0] || "", city: "", role: toks.slice(1).join(" ") };
+}
+async function fromJobAlertsHub() {
+  const sm = await getText("https://jobalertshub.com/post-sitemap1.xml");
+  const pairs = [...sm.matchAll(/<loc>(.*?)<\/loc>\s*<lastmod>(.*?)<\/lastmod>/g)];
+  const out = [];
+  for (const [, loc, mod] of pairs) {
+    const slug = loc.replace(/https?:\/\/jobalertshub\.com\//, "").replace(/\/$/, "");
+    const { company, role } = parseJAHSlug(slug);
+    if (!role || !/\b(engineer|developer|software|programmer|devops|analyst|architect|sde)\b/i.test(role)) continue;
+    out.push({
+      company: company || "India employer",
+      role: role
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .replace(/\bAi\b/g, "AI")
+        .replace(/\bMl\b/g, "ML")
+        .replace(/\bUi\b/g, "UI")
+        .replace(/\bUx\b/g, "UX")
+        .replace(/\bQa\b/g, "QA")
+        .replace(/\bSde\b/g, "SDE"),
+      loc: "India",
+      url: loc,
+      source: "jobalertshub",
+      posted: mod,
+      matchText: slug.replace(/-/g, " "),
+      india: true,
+    });
+  }
+  return out;
+}
+
 async function pool(items, fn, size = 12) {
   const res = [];
   for (let i = 0; i < items.length; i += size) res.push(...(await Promise.all(items.slice(i, i + size).map(fn))));
@@ -154,10 +210,10 @@ async function pool(items, fn, size = 12) {
 let cache = { at: 0, raw: null };
 async function allRaw(force = false) {
   if (!force && cache.raw && Date.now() - cache.at < 9 * 60000) return cache.raw;
-  const [gh, lv, as, rok, hn, fl] = await Promise.all([
-    pool(GREENHOUSE, fromGreenhouse), pool(LEVER, fromLever), pool(ASHBY, fromAshby), fromRemoteOK(), fromHN(), fromFrontline(),
+  const [gh, lv, as, rok, hn, fl, jah] = await Promise.all([
+    pool(GREENHOUSE, fromGreenhouse), pool(LEVER, fromLever), pool(ASHBY, fromAshby), fromRemoteOK(), fromHN(), fromFrontline(), fromJobAlertsHub(),
   ]);
-  cache = { at: Date.now(), raw: [...gh, ...lv, ...as, ...rok, ...hn, ...fl] };
+  cache = { at: Date.now(), raw: [...gh, ...lv, ...as, ...rok, ...hn, ...fl, ...jah] };
   return cache.raw;
 }
 
@@ -167,7 +223,7 @@ function leadOf(region, postedMs) {
   return ageDays < 21 ? "warm" : "cold";
 }
 
-const SOURCE_LABEL = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", remoteok: "RemoteOK", hackernews: "Hacker News", frontline: "Frontline Media" };
+const SOURCE_LABEL = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", remoteok: "RemoteOK", hackernews: "Hacker News", frontline: "Frontline Media", jobalertshub: "Job Alerts Hub" };
 
 // Returns listings for one live track, India-first, capped per company.
 export async function getListings(trackId, { limit = 60, perCompany = 5, fresh = false } = {}) {

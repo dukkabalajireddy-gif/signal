@@ -23,7 +23,8 @@ export type Platform =
   | "ashby"
   | "remoteok"
   | "hackernews"
-  | "frontline";
+  | "frontline"
+  | "jobalertshub";
 export type Lead = "hot" | "warm" | "cold";
 export type Status = "open" | "archived";
 
@@ -65,6 +66,7 @@ export const PLATFORM_META: Record<Platform, { label: string; dot: string }> = {
   remoteok: { label: "RemoteOK", dot: "#c6f24e" },
   hackernews: { label: "Hacker News", dot: "#ff6600" },
   frontline: { label: "Frontline Media", dot: "#ff8a3d" },
+  jobalertshub: { label: "Job Alerts Hub", dot: "#f0c04a" },
 };
 
 export const LEAD_META: Record<Lead, { label: string; fg: string; bg: string }> = {

@@ -1,9 +1,10 @@
 // Live source fetcher for Signal.
 //
 // Pulls real postings from keyless sources (public ATS APIs, Hacker News,
-// RemoteOK), filters to a track + India/remote, and returns objects in the
-// frontend's Listing shape. Used by both the Vercel function (api/signals.js)
-// and the local Vite dev middleware (vite.config.ts).
+// RemoteOK, and Frontline Media's WordPress API), filters to a track +
+// India/remote, sorts India-first, caps per company, and returns objects in
+// the frontend's Listing shape. Used by both the Vercel function
+// (api/signals.js) and the local Vite dev middleware (vite.config.ts).
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; SignalBot/0.1)" };
 
@@ -22,6 +23,7 @@ async function getJSON(url, ms = 11000) {
 }
 
 // ── track + region classifiers ───────────────────────────────────────────────
+const hasEng = (t) => /\b(engineer|developer|sde|programmer)\b/i.test(t);
 export const LIVE_TRACKS = {
   "forward-deployed": { name: "Forward Deployed Engineer", match: (t) => /forward[\s-]?deployed/i.test(t) },
   "ai-engineer": {
@@ -31,6 +33,9 @@ export const LIVE_TRACKS = {
       /\bengineer\b[^.]*\b(ai|ml|llm|machine learning|generative ai)\b/i.test(t) ||
       /\b(ai|ml|machine learning) engineer\b/i.test(t),
   },
+  "full-stack": { name: "Full Stack Engineer", match: (t) => /full[\s-]?stack/i.test(t) && hasEng(t) },
+  "backend": { name: "Backend Engineer", match: (t) => /\bback[\s-]?end\b/i.test(t) && hasEng(t) },
+  "frontend": { name: "Front-end Engineer", match: (t) => /\bfront[\s-]?end\b/i.test(t) && hasEng(t) },
 };
 
 const INDIA = /\b(india|bengaluru|bangalore|mumbai|new delhi|delhi|gurgaon|gurugram|hyderabad|pune|chennai|noida|kolkata|ahmedabad|remote[- ]?india)\b/i;
@@ -40,15 +45,12 @@ const regionOf = (s) => (INDIA.test(s || "") ? "india" : REMOTE.test(s || "") ? 
 const strip = (html) => (html || "").replace(/<[^>]+>/g, " ").replace(/&[a-z#0-9]+;/g, " ").replace(/\s+/g, " ").trim();
 
 const PRETTY = {
-  databricks: "Databricks", anthropic: "Anthropic", gitlab: "GitLab", scaleai: "Scale AI",
-  mongodb: "MongoDB", hashicorp: "HashiCorp", browserstack: "BrowserStack", razorpaysoftwares: "Razorpay",
-  openai: "OpenAI", posthog: "PostHog", observeai: "Observe.AI", baseten: "Baseten", phonepe: "PhonePe",
-  cred: "CRED", meesho: "Meesho", groww: "Groww", sarvam: "Sarvam AI", hasura: "Hasura",
-  innovaccer: "Innovaccer", druva: "Druva", chargebee: "Chargebee", mindtickle: "Mindtickle",
-  whatfix: "Whatfix", gupshup: "Gupshup", postman: "Postman", retool: "Retool", ramp: "Ramp",
-  confluent: "Confluent", notion: "Notion", linear: "Linear", vanta: "Vanta", mercury: "Mercury",
-  deel: "Deel", replit: "Replit", perplexity: "Perplexity", harvey: "Harvey", glean: "Glean",
-  writer: "Writer", cresta: "Cresta", sierra: "Sierra", decagon: "Decagon", clay: "Clay", hex: "Hex",
+  databricks: "Databricks", anthropic: "Anthropic", gitlab: "GitLab", scaleai: "Scale AI", mongodb: "MongoDB",
+  figma: "Figma", druva: "Druva", groww: "Groww", meesho: "Meesho", cred: "CRED", openai: "OpenAI",
+  cursor: "Cursor", cognition: "Cognition", harvey: "Harvey", elevenlabs: "ElevenLabs", notion: "Notion",
+  perplexity: "Perplexity", sierra: "Sierra", langchain: "LangChain", decagon: "Decagon", baseten: "Baseten",
+  cohere: "Cohere", ramp: "Ramp", vanta: "Vanta", replit: "Replit", writer: "Writer", fireworks: "Fireworks AI",
+  linear: "Linear", hex: "Hex", posthog: "PostHog", observeai: "Observe.AI",
 };
 const pretty = (s) => PRETTY[s] || s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -58,10 +60,11 @@ function hash(str) {
   return Math.abs(h).toString(36);
 }
 
-// ── sources ──────────────────────────────────────────────────────────────────
-const GREENHOUSE = ["databricks","anthropic","gitlab","scaleai","mongodb","hashicorp","confluent","retool","ramp","razorpaysoftwares","postman","cred","meesho","phonepe","groww","sarvam","browserstack","hasura","innovaccer","druva","chargebee","mindtickle","whatfix","gupshup"];
-const LEVER = ["huggingface","cohere","mistral","together","perplexity","voiceflow"];
-const ASHBY = ["openai","ramp","notion","linear","vanta","clay","hex","mercury","deel","replit","perplexity","harvey","sierra","decagon","glean","writer","cresta","observeai","baseten","posthog"];
+// ── sources (verified working boards) ────────────────────────────────────────
+const GREENHOUSE = ["databricks", "mongodb", "gitlab", "druva", "groww", "anthropic", "figma", "scaleai"];
+const LEVER = ["meesho", "cred"];
+const ASHBY = ["harvey", "openai", "cursor", "cognition", "elevenlabs", "notion", "perplexity", "sierra", "langchain", "decagon", "baseten", "cohere", "ramp", "vanta", "replit", "writer", "fireworks", "linear", "hex"];
+const FRONTLINE_CAT = 367;
 
 async function fromGreenhouse(token) {
   const d = await getJSON(`https://boards-api.greenhouse.io/v1/boards/${token}/jobs`);
@@ -83,21 +86,31 @@ async function fromRemoteOK() {
   if (!Array.isArray(d)) return [];
   return d.filter((j) => j.position).map((j) => ({
     company: j.company, role: j.position, loc: j.location || "Remote", url: j.url, source: "remoteok", posted: j.date,
-    salary: j.salary_min ? `$${Math.round(j.salary_min / 1000)}k–${Math.round(j.salary_max / 1000)}k` : "", extra: (j.tags || []).join(" "),
+    salary: j.salary_min ? `$${Math.round(j.salary_min / 1000)}k–${Math.round(j.salary_max / 1000)}k` : "", matchText: `${j.position} ${(j.tags || []).join(" ")}`,
   }));
 }
 async function fromHN() {
   const out = [];
-  for (const q of ["forward deployed engineer", "AI engineer", "ML engineer"]) {
+  for (const q of ["forward deployed engineer", "AI engineer", "full stack engineer", "backend engineer"]) {
     const d = await getJSON(`https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(q)}&tags=comment&hitsPerPage=40`);
     for (const h of d?.hits || []) {
       const text = strip(h.comment_text);
       const parts = text.split("|").map((s) => s.trim());
-      if (parts.length < 3) continue; // keep only structured "Company | Role | …" posts
+      if (parts.length < 3) continue;
       out.push({ company: parts[0].slice(0, 36), role: parts[1].slice(0, 90), loc: text, url: `https://news.ycombinator.com/item?id=${h.objectID}`, source: "hackernews", posted: h.created_at });
     }
   }
   return out;
+}
+async function fromFrontline() {
+  const posts = await getJSON(`https://frontlinesmedia.in/wp-json/wp/v2/posts?categories=${FRONTLINE_CAT}&per_page=60&_fields=date,link,title,excerpt`);
+  if (!Array.isArray(posts)) return [];
+  return posts.map((p) => {
+    const title = strip(p.title?.rendered || "");
+    const excerpt = strip(p.excerpt?.rendered || "");
+    const company = (title.split(/\b(?:are hiring|is hiring|hiring|:)/i)[0] || title).split(/,| and /i)[0].trim().slice(0, 40) || "India employer";
+    return { company, role: title.slice(0, 95), loc: title, url: p.link, source: "frontline", posted: p.date, matchText: `${title} ${excerpt}`, india: true };
+  });
 }
 
 async function pool(items, fn, size = 12) {
@@ -106,14 +119,14 @@ async function pool(items, fn, size = 12) {
   return res.flat();
 }
 
-// in-memory cache so two track calls share one fetch (and warm invocations are fast)
+// in-memory cache so track calls share one fetch
 let cache = { at: 0, raw: null };
 async function allRaw() {
   if (cache.raw && Date.now() - cache.at < 9 * 60000) return cache.raw;
-  const [gh, lv, ash, rok, hn] = await Promise.all([
-    pool(GREENHOUSE, fromGreenhouse), pool(LEVER, fromLever), pool(ASHBY, fromAshby), fromRemoteOK(), fromHN(),
+  const [gh, lv, as, rok, hn, fl] = await Promise.all([
+    pool(GREENHOUSE, fromGreenhouse), pool(LEVER, fromLever), pool(ASHBY, fromAshby), fromRemoteOK(), fromHN(), fromFrontline(),
   ]);
-  cache = { at: Date.now(), raw: [...gh, ...lv, ...ash, ...rok, ...hn] };
+  cache = { at: Date.now(), raw: [...gh, ...lv, ...as, ...rok, ...hn, ...fl] };
   return cache.raw;
 }
 
@@ -123,23 +136,25 @@ function leadOf(region, postedMs) {
   return ageDays < 21 ? "warm" : "cold";
 }
 
-// Returns listings for one live track, in the frontend's Listing shape.
-export async function getListings(trackId, limit = 40) {
+const SOURCE_LABEL = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", remoteok: "RemoteOK", hackernews: "Hacker News", frontline: "Frontline Media" };
+
+// Returns listings for one live track, India-first, capped per company.
+export async function getListings(trackId, { limit = 60, perCompany = 5 } = {}) {
   const track = LIVE_TRACKS[trackId];
   if (!track) return [];
   const raw = await allRaw();
   const seen = new Set();
-  const out = [];
+  const matched = [];
   for (const r of raw) {
-    if (!r.role || !track.match(r.role)) continue;
-    const hay = r.source === "remoteok" ? `${r.loc} ${r.extra || ""}` : r.loc;
-    const region = r.source === "remoteok" ? "remote" : regionOf(hay);
+    const text = r.matchText || r.role || "";
+    if (!track.match(text)) continue;
+    const region = r.india ? "india" : r.source === "remoteok" ? "remote" : regionOf(`${r.loc} ${r.matchText || ""}`);
     if (!region) continue;
     const key = (r.company + "|" + r.role).toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     const postedMs = r.posted ? new Date(r.posted).getTime() : Date.now();
-    out.push({
+    matched.push({
       id: `real-${hash(r.url || key)}`,
       trackId,
       role: r.role,
@@ -147,15 +162,27 @@ export async function getListings(trackId, limit = 40) {
       companySize: "",
       salary: r.salary || "",
       platform: r.source,
-      sourceLabel: { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", remoteok: "RemoteOK", hackernews: "Hacker News" }[r.source],
+      sourceLabel: SOURCE_LABEL[r.source],
       url: r.url || "#",
       location: region === "india" ? "India" : "Remote",
       lead: leadOf(region, postedMs),
       postedSec: Math.max(1, Math.round((Date.now() - postedMs) / 1000)),
       status: "open",
       viewed: false,
+      _region: region,
     });
   }
-  out.sort((a, b) => a.postedSec - b.postedSec);
-  return out.slice(0, limit);
+  // India first, then most recent.
+  matched.sort((a, b) => (a._region === "india" ? 0 : 1) - (b._region === "india" ? 0 : 1) || a.postedSec - b.postedSec);
+  // Cap per company so one big board can't flood the track.
+  const count = {};
+  const out = [];
+  for (const m of matched) {
+    count[m.company] = (count[m.company] || 0) + 1;
+    if (count[m.company] > perCompany) continue;
+    const { _region, ...clean } = m;
+    out.push(clean);
+    if (out.length >= limit) break;
+  }
+  return out;
 }

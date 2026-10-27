@@ -396,7 +396,11 @@ function TrackDetail({
       const q = query.trim().toLowerCase();
       return !q || l.company.toLowerCase().includes(q) || l.role.toLowerCase().includes(q);
     })
-    .sort((a, b) => a.postedSec - b.postedSec);
+    .sort((a, b) => {
+      const ai = a.location === "India" ? 0 : 1;
+      const bi = b.location === "India" ? 0 : 1;
+      return ai - bi || a.postedSec - b.postedSec;
+    });
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-8 lg:px-10">
@@ -547,6 +551,7 @@ export default function App() {
   // Stream simulated listings into the Wizard-of-Oz tracks only.
   useEffect(() => {
     const woz = TRACKS.filter((t) => !isLiveTrack(t.id));
+    if (!woz.length) return;
     const t = setInterval(() => {
       const track = woz[Math.floor(Math.random() * woz.length)];
       setListings((prev) => [makeLiveListing(track), ...prev].slice(0, 400));

@@ -22,12 +22,13 @@ export type Platform =
   | "lever"
   | "ashby"
   | "remoteok"
-  | "hackernews";
+  | "hackernews"
+  | "frontline";
 export type Lead = "hot" | "warm" | "cold";
 export type Status = "open" | "archived";
 
 // Tracks that pull REAL live data from /api/signals. The rest stay simulated.
-export const LIVE_TRACK_IDS = ["forward-deployed", "ai-engineer"] as const;
+export const LIVE_TRACK_IDS = ["forward-deployed", "ai-engineer", "full-stack", "backend", "frontend"] as const;
 export const isLiveTrack = (id: string) => (LIVE_TRACK_IDS as readonly string[]).includes(id);
 
 export interface Track {
@@ -63,6 +64,7 @@ export const PLATFORM_META: Record<Platform, { label: string; dot: string }> = {
   ashby: { label: "Ashby", dot: "#a78bfa" },
   remoteok: { label: "RemoteOK", dot: "#c6f24e" },
   hackernews: { label: "Hacker News", dot: "#ff6600" },
+  frontline: { label: "Frontline Media", dot: "#ff8a3d" },
 };
 
 export const LEAD_META: Record<Lead, { label: string; fg: string; bg: string }> = {

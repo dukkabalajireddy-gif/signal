@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  isLiveTrack,
   LEAD_META,
+  LIVE_TRACK_IDS,
   makeLiveListing,
   PLATFORM_META,
   SEED_LISTINGS,
@@ -10,6 +12,8 @@ import {
   type Platform,
   type Track,
 } from "./data";
+
+type LiveState = Record<string, "loading" | "ok" | "error">;
 
 type Nav = "signals" | "pipeline" | "insights";
 type StatusTab = "open" | "archived";
@@ -140,6 +144,8 @@ function TrackCard({
   newCount,
   sources,
   lastSec,
+  live,
+  status,
   onOpen,
 }: {
   track: Track;
@@ -147,8 +153,12 @@ function TrackCard({
   newCount: number;
   sources: Platform[];
   lastSec: number;
+  live?: boolean;
+  status?: "loading" | "ok" | "error";
   onOpen: () => void;
 }) {
+  const loading = live && status === "loading";
+  const error = live && status === "error";
   return (
     <button
       onClick={onOpen}
@@ -156,16 +166,25 @@ function TrackCard({
     >
       <div className="flex items-start justify-between gap-2">
         <span className="text-base font-semibold leading-snug">{track.name}</span>
-        {newCount > 0 && (
-          <span className="shrink-0 rounded-full bg-lime px-2 py-0.5 text-[11px] font-semibold text-ink">
-            {newCount} new
+        {live ? (
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-lime/40 px-2 py-0.5 text-[11px] font-semibold text-lime">
+            <span className="h-1.5 w-1.5 rounded-full bg-lime animate-pulse-dot" />
+            Live
           </span>
+        ) : (
+          newCount > 0 && (
+            <span className="shrink-0 rounded-full bg-lime px-2 py-0.5 text-[11px] font-semibold text-ink">
+              {newCount} new
+            </span>
+          )
         )}
       </div>
 
       <div className="mt-6 flex items-end justify-between">
         <div>
-          <div className="font-mono text-2xl font-semibold leading-none">{openCount}</div>
+          <div className="font-mono text-2xl font-semibold leading-none">
+            {loading ? "…" : error ? "—" : openCount}
+          </div>
           <div className="mt-1 text-xs text-muted">open signals</div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -178,7 +197,15 @@ function TrackCard({
       </div>
 
       <div className="mt-4 flex items-center justify-between border-t border-line pt-3 text-xs text-faint">
-        <span>{openCount > 0 ? `Updated ${relTime(lastSec)}` : "No signals yet"}</span>
+        <span>
+          {loading
+            ? "Fetching live signals…"
+            : error
+              ? "Couldn't load live data"
+              : openCount > 0
+                ? `Updated ${relTime(lastSec)}`
+                : "No signals yet"}
+        </span>
         <span className="text-muted transition-transform group-hover:translate-x-0.5">→</span>
       </div>
     </button>
@@ -199,9 +226,11 @@ function AddTrackCard() {
 
 function TracksGrid({
   listings,
+  liveState,
   onOpenTrack,
 }: {
   listings: Listing[];
+  liveState: LiveState;
   onOpenTrack: (id: string) => void;
 }) {
   const stats = useMemo(() => {
@@ -233,6 +262,7 @@ function TracksGrid({
       <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {TRACKS.map((t) => {
           const s = stats.get(t.id)!;
+          const live = isLiveTrack(t.id);
           return (
             <TrackCard
               key={t.id}
@@ -241,6 +271,8 @@ function TracksGrid({
               newCount={s.neu}
               sources={[...s.sources].slice(0, 4)}
               lastSec={s.last === Infinity ? 0 : s.last}
+              live={live}
+              status={live ? liveState[t.id] : undefined}
               onOpen={() => onOpenTrack(t.id)}
             />
           );
@@ -273,10 +305,24 @@ function ListingRow({
 
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
           <span className="font-medium text-text/90">{l.company}</span>
-          <span className="text-faint">·</span>
-          <span>{l.companySize} employees</span>
-          <span className="text-faint">·</span>
-          <span className="font-medium text-lime">{l.salary}</span>
+          {l.location && (
+            <>
+              <span className="text-faint">·</span>
+              <span>{l.location}</span>
+            </>
+          )}
+          {l.companySize && (
+            <>
+              <span className="text-faint">·</span>
+              <span>{l.companySize} employees</span>
+            </>
+          )}
+          {l.salary && (
+            <>
+              <span className="text-faint">·</span>
+              <span className="font-medium text-lime">{l.salary}</span>
+            </>
+          )}
         </div>
 
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-faint">
@@ -323,12 +369,16 @@ function ListingRow({
 function TrackDetail({
   track,
   listings,
+  live,
+  status,
   onBack,
   onToggleArchive,
   onDelete,
 }: {
   track: Track;
   listings: Listing[];
+  live?: boolean;
+  status?: "loading" | "ok" | "error";
   onBack: () => void;
   onToggleArchive: (id: string) => void;
   onDelete: (id: string) => void;
@@ -379,9 +429,19 @@ function TrackDetail({
         </div>
       </div>
 
-      <h1 className="mt-4 text-2xl font-semibold tracking-tight">{track.name}</h1>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">{track.name}</h1>
+        {live && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-lime/40 px-2.5 py-1 text-[11px] font-semibold text-lime">
+            <span className="h-1.5 w-1.5 rounded-full bg-lime animate-pulse-dot" />
+            {status === "loading" ? "Fetching…" : status === "error" ? "Live · error" : "Live"}
+          </span>
+        )}
+      </div>
       <p className="mt-1 text-sm text-muted">
-        Companies showing active demand for this role across India.
+        {live
+          ? "Real openings pulled from job boards & communities — India-based or remote."
+          : "Companies showing active demand for this role across India."}
       </p>
 
       {/* tabs */}
@@ -409,9 +469,13 @@ function TrackDetail({
       <div className="mt-5 space-y-3 pb-10">
         {visible.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line px-6 py-14 text-center text-sm text-muted">
-            {tab === "open"
-              ? "No open signals here yet. New ones stream in as they're detected."
-              : "Nothing archived yet. Archive a signal to park it here."}
+            {live && status === "loading"
+              ? "Fetching live signals from job boards & communities…"
+              : live && status === "error"
+                ? "Couldn't reach the live sources. Try again shortly."
+                : tab === "open"
+                  ? "No open signals here yet. New ones stream in as they're detected."
+                  : "Nothing archived yet. Archive a signal to park it here."}
           </div>
         ) : (
           visible.map((l) => (
@@ -445,7 +509,32 @@ function EmptyView({ title, note }: { title: string; note: string }) {
 export default function App() {
   const [nav, setNav] = useState<Nav>("signals");
   const [activeTrack, setActiveTrack] = useState<string | null>(null);
-  const [listings, setListings] = useState<Listing[]>(SEED_LISTINGS);
+  const [listings, setListings] = useState<Listing[]>(() =>
+    SEED_LISTINGS.filter((l) => !isLiveTrack(l.trackId)),
+  );
+  const [liveState, setLiveState] = useState<LiveState>(() =>
+    Object.fromEntries(LIVE_TRACK_IDS.map((id) => [id, "loading"])),
+  );
+
+  // Pull real listings for the live tracks from the backend.
+  useEffect(() => {
+    let cancelled = false;
+    LIVE_TRACK_IDS.forEach(async (id) => {
+      try {
+        const r = await fetch(`/api/signals?track=${id}`);
+        const data = await r.json();
+        if (cancelled) return;
+        const fetched: Listing[] = Array.isArray(data.listings) ? data.listings : [];
+        setListings((prev) => [...prev.filter((l) => l.trackId !== id), ...fetched]);
+        setLiveState((s) => ({ ...s, [id]: "ok" }));
+      } catch {
+        if (!cancelled) setLiveState((s) => ({ ...s, [id]: "error" }));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Age timestamps.
   useEffect(() => {
@@ -455,10 +544,11 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  // Stream new listings into random tracks.
+  // Stream simulated listings into the Wizard-of-Oz tracks only.
   useEffect(() => {
+    const woz = TRACKS.filter((t) => !isLiveTrack(t.id));
     const t = setInterval(() => {
-      const track = TRACKS[Math.floor(Math.random() * TRACKS.length)];
+      const track = woz[Math.floor(Math.random() * woz.length)];
       setListings((prev) => [makeLiveListing(track), ...prev].slice(0, 400));
     }, 9000);
     return () => clearInterval(t);
@@ -511,12 +601,14 @@ export default function App() {
           <TrackDetail
             track={track}
             listings={listings}
+            live={isLiveTrack(track.id)}
+            status={liveState[track.id]}
             onBack={() => setActiveTrack(null)}
             onToggleArchive={toggleArchive}
             onDelete={deleteListing}
           />
         ) : (
-          <TracksGrid listings={listings} onOpenTrack={openTrack} />
+          <TracksGrid listings={listings} liveState={liveState} onOpenTrack={openTrack} />
         )}
       </main>
     </div>

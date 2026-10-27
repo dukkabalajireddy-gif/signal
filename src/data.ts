@@ -12,9 +12,23 @@
 // sources. Swap TRACKS below with BabbleBots.ai's real 9–12 track names.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type Platform = "naukri" | "linkedin" | "reddit" | "x" | "slack";
+export type Platform =
+  | "naukri"
+  | "linkedin"
+  | "reddit"
+  | "x"
+  | "slack"
+  | "greenhouse"
+  | "lever"
+  | "ashby"
+  | "remoteok"
+  | "hackernews";
 export type Lead = "hot" | "warm" | "cold";
 export type Status = "open" | "archived";
+
+// Tracks that pull REAL live data from /api/signals. The rest stay simulated.
+export const LIVE_TRACK_IDS = ["forward-deployed", "ai-engineer"] as const;
+export const isLiveTrack = (id: string) => (LIVE_TRACK_IDS as readonly string[]).includes(id);
 
 export interface Track {
   id: string;
@@ -31,6 +45,7 @@ export interface Listing {
   platform: Platform;
   sourceLabel: string; // "Naukri.com", "r/developersIndia", ...
   url: string; // original listing (demo → source homepage)
+  location?: string; // "India" / "Remote" for live listings
   lead: Lead;
   postedSec: number; // seconds since posted
   status: Status;
@@ -43,6 +58,11 @@ export const PLATFORM_META: Record<Platform, { label: string; dot: string }> = {
   reddit: { label: "Reddit", dot: "#ff6a3d" },
   x: { label: "X", dot: "#e9e9f4" },
   slack: { label: "Community", dot: "#c6f24e" },
+  greenhouse: { label: "Greenhouse", dot: "#3bbf6f" },
+  lever: { label: "Lever", dot: "#6b74ff" },
+  ashby: { label: "Ashby", dot: "#a78bfa" },
+  remoteok: { label: "RemoteOK", dot: "#c6f24e" },
+  hackernews: { label: "Hacker News", dot: "#ff6600" },
 };
 
 export const LEAD_META: Record<Lead, { label: string; fg: string; bg: string }> = {
@@ -108,6 +128,8 @@ function sourceLabel(p: Platform, company: string): string {
       return "@" + company.toLowerCase().replace(/[^a-z0-9]/g, "") + "hq";
     case "slack":
       return "AI Hiring India #jobs";
+    default:
+      return PLATFORM_META[p].label;
   }
 }
 
@@ -122,6 +144,8 @@ function sourceUrl(p: Platform): string {
     case "x":
       return "https://x.com/search";
     case "slack":
+      return "#";
+    default:
       return "#";
   }
 }

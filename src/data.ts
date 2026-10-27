@@ -1,165 +1,178 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Signal — seeded, convincing demo data (Wizard-of-Oz).
-// The platform is HORIZONTAL: everything is driven by `trackedKeywords`.
-// AI-hiring is just the first demo configuration. Swap the keywords and the
-// signal pool and the same UI tracks any topic across any source.
+//
+// The platform is HORIZONTAL and TRACK-based:
+//   • A `Track` is a topic/keyword BabbleBots.ai monitors (e.g. "AI Engineer").
+//   • Each track collects `Listing`s — demand signals scraped from the web
+//     (job boards + social): a company looking for that role, with size, package,
+//     source and a lead temperature.
+//
+// Everything here is SIMULATED for now. Replacing it with real scraped data is a
+// data-layer swap: keep the `Track` / `Listing` shapes and feed them from live
+// sources. Swap TRACKS below with BabbleBots.ai's real 9–12 track names.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type Platform = "x" | "reddit" | "slack" | "linkedin";
+export type Platform = "naukri" | "linkedin" | "reddit" | "x" | "slack";
+export type Lead = "hot" | "warm" | "cold";
+export type Status = "open" | "archived";
 
-export interface Signal {
+export interface Track {
   id: string;
-  tag: string; // e.g. "COMPANY HIRING SIGNAL"
-  match: number; // 0-100 relevance score
-  author: string;
-  handle: string; // @handle, r/sub, or community name
+  name: string;
+}
+
+export interface Listing {
+  id: string;
+  trackId: string;
+  role: string; // what they're looking for, e.g. "Senior AI Engineer"
+  company: string;
+  companySize: string; // headcount band, e.g. "500–1000"
+  salary: string; // avg package for the role, e.g. "₹18–28 LPA"
   platform: Platform;
-  text: string;
-  keywords: string[]; // substrings to highlight in `text`
-  ageSec: number; // seconds since posted
-  read: boolean;
+  sourceLabel: string; // "Naukri.com", "r/developersIndia", ...
+  url: string; // original listing (demo → source homepage)
+  lead: Lead;
+  postedSec: number; // seconds since posted
+  status: Status;
+  viewed: boolean;
 }
 
 export const PLATFORM_META: Record<Platform, { label: string; dot: string }> = {
-  x: { label: "X", dot: "#e9e9f4" },
-  reddit: { label: "Reddit", dot: "#ff6a3d" },
-  slack: { label: "Community", dot: "#c6f24e" },
+  naukri: { label: "Naukri.com", dot: "#4a7cff" },
   linkedin: { label: "LinkedIn", dot: "#4aa3ff" },
+  reddit: { label: "Reddit", dot: "#ff6a3d" },
+  x: { label: "X", dot: "#e9e9f4" },
+  slack: { label: "Community", dot: "#c6f24e" },
 };
 
-export const DEFAULT_KEYWORDS = ["AI Engineer", "LLM", "AI agents", "Founding engineer"];
+export const LEAD_META: Record<Lead, { label: string; fg: string; bg: string }> = {
+  hot: { label: "Hot", fg: "#0b0b16", bg: "#c6f24e" },
+  warm: { label: "Warm", fg: "#f5c451", bg: "rgba(245, 196, 81, 0.14)" },
+  cold: { label: "Cold", fg: "#8fa6c6", bg: "rgba(143, 166, 198, 0.12)" },
+};
 
-export const SOURCE_COUNT = 3;
-
-// The feed shown on first load.
-export const SEED_SIGNALS: Signal[] = [
-  {
-    id: "s1",
-    tag: "COMPANY HIRING SIGNAL",
-    match: 98,
-    author: "Aditi Rao",
-    handle: "@aditibuilds",
-    platform: "x",
-    text: "We're hiring a Founding ML Engineer to build our inference stack. Bengaluru, strong PyTorch + systems experience.",
-    keywords: ["Founding ML Engineer", "inference"],
-    ageSec: 12,
-    read: false,
-  },
-  {
-    id: "s2",
-    tag: "DECISION-MAKER HIRING",
-    match: 91,
-    author: "datachai",
-    handle: "r/developersIndia",
-    platform: "reddit",
-    text: "My team is looking for an AI Product Lead in Gurugram. ₹45–60 LPA, working directly with our LLM platform team.",
-    keywords: ["AI Product Lead", "LLM"],
-    ageSec: 64,
-    read: false,
-  },
-  {
-    id: "s3",
-    tag: "NEW HIRING COMPANY",
-    match: 86,
-    author: "Rohan Mehta",
-    handle: "The Product Folks #jobs",
-    platform: "slack",
-    text: "Quietly searching for a senior AI infrastructure engineer in Hyderabad. Must love developer tools and early-stage ambiguity.",
-    keywords: ["AI infrastructure engineer"],
-    ageSec: 182,
-    read: false,
-  },
-  {
-    id: "s4",
-    tag: "TEAM EXPANSION DETECTED",
-    match: 82,
-    author: "Priya Kapoor",
-    handle: "@priyakapoor",
-    platform: "x",
-    text: "Our Bengaluru research team is growing. Seeking an NLP researcher who has shipped real-world agents.",
-    keywords: ["NLP researcher", "agents"],
-    ageSec: 372,
-    read: true,
-  },
-  {
-    id: "s5",
-    tag: "FOUNDER HIRING MENTION",
-    match: 76,
-    author: "latent_space_in",
-    handle: "r/StartUpIndia",
-    platform: "reddit",
-    text: "Seed-stage Pune team needs its first AI engineer. Equity-heavy, India remote-friendly, moving very fast.",
-    keywords: ["AI engineer"],
-    ageSec: 548,
-    read: true,
-  },
+// Placeholder tracks — swap with BabbleBots.ai's real 9 when shared.
+export const TRACKS: Track[] = [
+  { id: "ai-engineer", name: "AI Engineer" },
+  { id: "full-stack", name: "Full Stack Engineer" },
+  { id: "llm-engineer", name: "LLM Engineer" },
+  { id: "ml-engineer", name: "ML Engineer" },
+  { id: "data-scientist", name: "Data Scientist" },
+  { id: "ai-pm", name: "AI Product Manager" },
+  { id: "mlops", name: "MLOps Engineer" },
+  { id: "nlp", name: "NLP Researcher" },
+  { id: "cv-engineer", name: "Computer Vision Engineer" },
 ];
 
-// Pool of extra signals that stream in "live" to make the feed feel alive.
-export const LIVE_POOL: Omit<Signal, "id" | "ageSec" | "read">[] = [
-  {
-    tag: "COMPANY HIRING SIGNAL",
-    match: 94,
-    author: "Kabir Shah",
-    handle: "@kabirships",
-    platform: "x",
-    text: "Expanding our applied AI team in Mumbai — need someone strong on LLM evals and agent orchestration.",
-    keywords: ["LLM", "agent"],
-  },
-  {
-    tag: "DECISION-MAKER HIRING",
-    match: 88,
-    author: "buildspace_blr",
-    handle: "r/developersIndia",
-    platform: "reddit",
-    text: "We're a fintech in Bengaluru hiring our first Founding engineer for an AI underwriting product. DMs open.",
-    keywords: ["Founding engineer", "AI"],
-  },
-  {
-    tag: "TEAM EXPANSION DETECTED",
-    match: 79,
-    author: "Neha Iyer",
-    handle: "Generative AI India #hiring",
-    platform: "slack",
-    text: "Scaling the ML team in Chennai. Looking for an AI Engineer comfortable with RAG and production agents.",
-    keywords: ["AI Engineer", "agents"],
-  },
-  {
-    tag: "NEW HIRING COMPANY",
-    match: 84,
-    author: "Arjun Nair",
-    handle: "@arjunbuilds",
-    platform: "x",
-    text: "Early team in Noida looking for an LLM engineer to own our retrieval + fine-tuning pipeline.",
-    keywords: ["LLM"],
-  },
-  {
-    tag: "FOUNDER HIRING MENTION",
-    match: 81,
-    author: "Sana Qureshi",
-    handle: "linkedin.com/in/sana-q",
-    platform: "linkedin",
-    text: "We just raised our seed round and are hiring a Founding engineer for our AI agents platform. Remote India.",
-    keywords: ["Founding engineer", "AI agents"],
-  },
-  {
-    tag: "DECISION-MAKER HIRING",
-    match: 90,
-    author: "zeroshot_ai",
-    handle: "r/MachineLearningIndia",
-    platform: "reddit",
-    text: "CTO here — hiring two AI Engineers in Pune for an on-device LLM project. Strong systems background a plus.",
-    keywords: ["AI Engineer", "LLM"],
-  },
+const COMPANIES: [string, string][] = [
+  ["Nurix AI", "11–50"],
+  ["Sarvam AI", "51–200"],
+  ["Observe.AI", "500–1000"],
+  ["Fractal", "1000+"],
+  ["Postman", "500–1000"],
+  ["Razorpay", "1000+"],
+  ["Yellow.ai", "201–500"],
+  ["Mad Street Den", "51–200"],
+  ["Uniphore", "500–1000"],
+  ["CRED", "500–1000"],
+  ["Hasura", "51–200"],
+  ["Innovaccer", "1000+"],
+  ["Darwinbox", "500–1000"],
+  ["Zepto", "1000+"],
+  ["Krutrim", "201–500"],
+  ["Rephrase.ai", "11–50"],
 ];
 
-export interface Spike {
-  term: string;
-  factor: string; // e.g. "3.4×"
-  ageLabel: string; // e.g. "2m"
+const SALARY_BANDS = [
+  "₹12–18 LPA",
+  "₹18–28 LPA",
+  "₹24–36 LPA",
+  "₹30–45 LPA",
+  "₹40–60 LPA",
+  "₹55–80 LPA",
+];
+const SENIORITY = ["", "Senior ", "Lead ", "Founding ", "Staff "];
+const PLATFORMS: Platform[] = ["naukri", "linkedin", "reddit", "x", "slack"];
+const LEADS: Lead[] = ["hot", "warm", "cold"];
+
+function sourceLabel(p: Platform, company: string): string {
+  switch (p) {
+    case "naukri":
+      return "Naukri.com";
+    case "linkedin":
+      return "LinkedIn";
+    case "reddit":
+      return "r/developersIndia";
+    case "x":
+      return "@" + company.toLowerCase().replace(/[^a-z0-9]/g, "") + "hq";
+    case "slack":
+      return "AI Hiring India #jobs";
+  }
 }
 
-export const SPIKES: Spike[] = [
-  { term: "AI agents", factor: "3.4×", ageLabel: "2m" },
-  { term: "Founding engineer", factor: "2.1×", ageLabel: "8m" },
-];
+function sourceUrl(p: Platform): string {
+  switch (p) {
+    case "naukri":
+      return "https://www.naukri.com";
+    case "linkedin":
+      return "https://www.linkedin.com/jobs";
+    case "reddit":
+      return "https://www.reddit.com/r/developersIndia";
+    case "x":
+      return "https://x.com/search";
+    case "slack":
+      return "#";
+  }
+}
+
+let seedN = 0;
+function makeListing(track: Track, i: number, ageBase: number): Listing {
+  const ci = (track.name.length * 3 + i * 5) % COMPANIES.length;
+  const [company, size] = COMPANIES[ci];
+  const platform = PLATFORMS[(i + track.name.length) % PLATFORMS.length];
+  const lead = LEADS[(i + ci) % LEADS.length];
+  const salary = SALARY_BANDS[(i + ci) % SALARY_BANDS.length];
+  const role = SENIORITY[(i + ci) % SENIORITY.length] + track.name;
+  return {
+    id: `seed-${seedN++}`,
+    trackId: track.id,
+    role,
+    company,
+    companySize: size,
+    salary,
+    platform,
+    sourceLabel: sourceLabel(platform, company),
+    url: sourceUrl(platform),
+    lead,
+    postedSec: ageBase + i * 220 + ci * 31,
+    status: "open",
+    viewed: i > 1, // first couple are unread
+  };
+}
+
+export const SEED_LISTINGS: Listing[] = TRACKS.flatMap((t, ti) =>
+  Array.from({ length: 4 + (ti % 3) }, (_, i) => makeListing(t, i, 24 + ti * 9)),
+);
+
+// A fresh listing that streams in "live" for a given track.
+let liveN = 0;
+const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+export function makeLiveListing(track: Track): Listing {
+  const [company, size] = pick(COMPANIES);
+  const platform = pick(PLATFORMS);
+  return {
+    id: `live-${liveN++}`,
+    trackId: track.id,
+    role: pick(SENIORITY) + track.name,
+    company,
+    companySize: size,
+    salary: pick(SALARY_BANDS),
+    platform,
+    sourceLabel: sourceLabel(platform, company),
+    url: sourceUrl(platform),
+    lead: pick(LEADS),
+    postedSec: 1,
+    status: "open",
+    viewed: false,
+  };
+}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   isLiveTrack,
   LEAD_META,
@@ -14,6 +14,25 @@ import {
 } from "./data";
 
 type LiveState = Record<string, "loading" | "ok" | "error">;
+
+// Per-browser persistence for archive/delete decisions, so a reload keeps them.
+const ARCH_KEY = "signal.archived.v1";
+const DEL_KEY = "signal.deleted.v1";
+function loadJSON<T>(key: string, fallback: T): T {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? (JSON.parse(v) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function saveJSON(key: string, val: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch {
+    /* private mode / blocked storage — ignore */
+  }
+}
 
 type Nav = "signals" | "pipeline" | "insights";
 type StatusTab = "open" | "archived";
@@ -368,7 +387,8 @@ function ListingRow({
 
 function TrackDetail({
   track,
-  listings,
+  open,
+  archived,
   live,
   status,
   onBack,
@@ -376,7 +396,8 @@ function TrackDetail({
   onDelete,
 }: {
   track: Track;
-  listings: Listing[];
+  open: Listing[];
+  archived: Listing[];
   live?: boolean;
   status?: "loading" | "ok" | "error";
   onBack: () => void;
@@ -386,12 +407,12 @@ function TrackDetail({
   const [tab, setTab] = useState<StatusTab>("open");
   const [query, setQuery] = useState("");
 
-  const mine = listings.filter((l) => l.trackId === track.id);
-  const openCount = mine.filter((l) => l.status === "open").length;
-  const archivedCount = mine.filter((l) => l.status === "archived").length;
+  const openMine = open.filter((l) => l.trackId === track.id);
+  const archivedMine = archived.filter((l) => l.trackId === track.id);
+  const openCount = openMine.length;
+  const archivedCount = archivedMine.length;
 
-  const visible = mine
-    .filter((l) => l.status === tab)
+  const visible = (tab === "open" ? openMine : archivedMine)
     .filter((l) => {
       const q = query.trim().toLowerCase();
       return !q || l.company.toLowerCase().includes(q) || l.role.toLowerCase().includes(q);
@@ -513,8 +534,21 @@ function EmptyView({ title, note }: { title: string; note: string }) {
 export default function App() {
   const [nav, setNav] = useState<Nav>("signals");
   const [activeTrack, setActiveTrack] = useState<string | null>(null);
+
+  // Persisted archive (full items) + delete (ids), so reloads keep decisions.
+  const deletedRef = useRef<Set<string>>(new Set(loadJSON<string[]>(DEL_KEY, [])));
+  const archivedRef = useRef<Listing[]>(loadJSON<Listing[]>(ARCH_KEY, []));
+  const [archived, setArchivedState] = useState<Listing[]>(archivedRef.current);
+  const setArchived = (updater: (prev: Listing[]) => Listing[]) => {
+    archivedRef.current = updater(archivedRef.current);
+    setArchivedState(archivedRef.current);
+    saveJSON(ARCH_KEY, archivedRef.current);
+  };
+  const isHidden = (id: string) =>
+    deletedRef.current.has(id) || archivedRef.current.some((a) => a.id === id);
+
   const [listings, setListings] = useState<Listing[]>(() =>
-    SEED_LISTINGS.filter((l) => !isLiveTrack(l.trackId)),
+    SEED_LISTINGS.filter((l) => !isLiveTrack(l.trackId)).filter((l) => !isHidden(l.id)),
   );
   const [liveState, setLiveState] = useState<LiveState>(() =>
     Object.fromEntries(LIVE_TRACK_IDS.map((id) => [id, "loading"])),
@@ -528,7 +562,9 @@ export default function App() {
         const r = await fetch(`/api/signals?track=${id}`);
         const data = await r.json();
         if (cancelled) return;
-        const fetched: Listing[] = Array.isArray(data.listings) ? data.listings : [];
+        const fetched: Listing[] = (Array.isArray(data.listings) ? data.listings : []).filter(
+          (l: Listing) => !isHidden(l.id),
+        );
         setListings((prev) => [...prev.filter((l) => l.trackId !== id), ...fetched]);
         setLiveState((s) => ({ ...s, [id]: "ok" }));
       } catch {
@@ -566,13 +602,25 @@ export default function App() {
       prev.map((l) => (l.trackId === id && l.status === "open" ? { ...l, viewed: true } : l)),
     );
   };
-  const toggleArchive = (id: string) =>
-    setListings((prev) =>
-      prev.map((l) =>
-        l.id === id ? { ...l, status: l.status === "archived" ? "open" : "archived" } : l,
-      ),
-    );
-  const deleteListing = (id: string) => setListings((prev) => prev.filter((l) => l.id !== id));
+  const toggleArchive = (id: string) => {
+    const inOpen = listings.find((l) => l.id === id);
+    if (inOpen) {
+      setListings((prev) => prev.filter((l) => l.id !== id));
+      setArchived((prev) => [{ ...inOpen, status: "archived" }, ...prev]);
+      return;
+    }
+    const inArchive = archivedRef.current.find((l) => l.id === id);
+    if (inArchive) {
+      setArchived((prev) => prev.filter((l) => l.id !== id));
+      setListings((prev) => [{ ...inArchive, status: "open" }, ...prev]);
+    }
+  };
+  const deleteListing = (id: string) => {
+    deletedRef.current.add(id);
+    saveJSON(DEL_KEY, [...deletedRef.current]);
+    setListings((prev) => prev.filter((l) => l.id !== id));
+    setArchived((prev) => prev.filter((l) => l.id !== id));
+  };
 
   const totalNew = useMemo(
     () => listings.filter((l) => l.status === "open" && !l.viewed).length,
@@ -605,7 +653,8 @@ export default function App() {
         ) : track ? (
           <TrackDetail
             track={track}
-            listings={listings}
+            open={listings}
+            archived={archived}
             live={isLiveTrack(track.id)}
             status={liveState[track.id]}
             onBack={() => setActiveTrack(null)}

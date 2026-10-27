@@ -42,6 +42,18 @@ export const LIVE_TRACKS = {
     match: (t) =>
       /\b(engineer|developer|sde|programmer|software|data|analyst|devops|qa|architect|intern|ai|ml|python|java|full[\s-]?stack|back[\s-]?end|front[\s-]?end|tech|roles|fresher|walk[\s-]?in|hiring)\b/i.test(t),
   },
+  "ai-pm": {
+    name: "AI Product Manager",
+    match: (t) => /\b(product manager|product lead|group product manager|principal pm|director of product|head of product)\b/i.test(t),
+  },
+  "gtm": {
+    name: "GTM Engineer",
+    match: (t) => /\b(gtm|go[\s-]?to[\s-]?market)\b/i.test(t) || /\b(growth|sales|solutions|revenue|deployment) engineer\b/i.test(t),
+  },
+  "intern": {
+    name: "Software/AI Engineering Intern",
+    match: (t) => /\b(intern|internship|fresher|graduate trainee|campus hire|entry[\s-]?level)\b/i.test(t),
+  },
 };
 
 const INDIA = /\b(india|bengaluru|bangalore|mumbai|new delhi|delhi|gurgaon|gurugram|hyderabad|pune|chennai|noida|kolkata|ahmedabad|remote[- ]?india)\b/i;
@@ -109,15 +121,27 @@ async function fromHN() {
   }
   return out;
 }
+// "NEC, Electronic arts and Cisco are hiring : ..." -> ["NEC","Electronic arts","Cisco"]
+function parseFrontlineCompanies(title) {
+  const head = (title.split(/\b(?:are hiring|is hiring|are now hiring|now hiring|hiring for|hiring|:)/i)[0] || "").trim();
+  const parts = head
+    .split(/,|\band\b|&/i)
+    .map((s) => s.trim())
+    .filter((p) => p.length >= 2 && p.length <= 40 && !/^(the|a|an|for|multiple|fresher|various|now|is|are|to)$/i.test(p));
+  return parts.length ? parts.slice(0, 4) : [(head || title).slice(0, 40) || "India employer"];
+}
 async function fromFrontline() {
   const posts = await getJSON(`https://frontlinesmedia.in/wp-json/wp/v2/posts?categories=${FRONTLINE_CAT}&per_page=60&_fields=date,link,title,excerpt`);
   if (!Array.isArray(posts)) return [];
-  return posts.map((p) => {
+  const out = [];
+  for (const p of posts) {
     const title = strip(p.title?.rendered || "");
     const excerpt = strip(p.excerpt?.rendered || "");
-    const company = (title.split(/\b(?:are hiring|is hiring|hiring|:)/i)[0] || title).split(/,| and /i)[0].trim().slice(0, 40) || "India employer";
-    return { company, role: title.slice(0, 95), loc: title, url: p.link, source: "frontline", posted: p.date, matchText: `${title} ${excerpt}`, india: true };
-  });
+    for (const company of parseFrontlineCompanies(title)) {
+      out.push({ company, role: title.slice(0, 95), loc: title, url: p.link, source: "frontline", posted: p.date, matchText: `${title} ${excerpt}`, india: true });
+    }
+  }
+  return out;
 }
 
 async function pool(items, fn, size = 12) {
@@ -163,7 +187,7 @@ export async function getListings(trackId, { limit = 60, perCompany = 5 } = {}) 
     seen.add(key);
     const postedMs = r.posted ? new Date(r.posted).getTime() : Date.now();
     matched.push({
-      id: `real-${hash(r.url || key)}`,
+      id: `real-${hash((r.url || "") + "|" + key)}`,
       trackId,
       role: r.role,
       company: pretty(r.company),

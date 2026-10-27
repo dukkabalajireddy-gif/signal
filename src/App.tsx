@@ -5,7 +5,6 @@ import {
   PLATFORM_META,
   SEED_SIGNALS,
   SOURCE_COUNT,
-  SPIKES,
   type Platform,
   type Signal,
 } from "./data";
@@ -80,7 +79,7 @@ function Logo() {
           />
         </svg>
       </div>
-      <span className="text-[19px] font-semibold tracking-tight">Signal</span>
+      <span className="text-[19px] font-semibold tracking-tight">BabbleBots.ai</span>
     </div>
   );
 }
@@ -261,73 +260,6 @@ function SignalCard({
   );
 }
 
-function Sparkline() {
-  const pts = [8, 12, 9, 16, 14, 22, 18, 26, 24, 31, 28, 34];
-  const max = Math.max(...pts);
-  const w = 240;
-  const h = 46;
-  const step = w / (pts.length - 1);
-  const d = pts
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${i * step} ${h - (p / max) * h}`)
-    .join(" ");
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="w-full" preserveAspectRatio="none">
-      <path d={`${d} L ${w} ${h} L 0 ${h} Z`} fill="var(--color-lime)" opacity="0.1" />
-      <path d={d} fill="none" stroke="var(--color-lime)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function LiveActivity({ eventsPerHour }: { eventsPerHour: number }) {
-  return (
-    <aside className="hidden w-[300px] shrink-0 flex-col gap-4 border-l border-line bg-panel px-5 py-6 xl:flex">
-      <div>
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-lime animate-pulse-dot" />
-          <span className="text-sm font-medium">Live activity</span>
-          <span className="ml-auto text-xs text-faint">Today</span>
-        </div>
-
-        <div className="mt-4 flex items-end gap-2">
-          <span className="font-mono text-4xl font-semibold leading-none">{eventsPerHour}</span>
-          <span className="mb-1 flex items-center gap-1 text-xs font-medium text-lime">↗ 24%</span>
-        </div>
-        <div className="mt-1 text-xs text-muted">India events / hour</div>
-
-        <div className="mt-4">
-          <Sparkline />
-          <div className="mt-1 flex justify-between font-mono text-[10px] text-faint">
-            <span>11:00</span>
-            <span>12:00</span>
-            <span>Now</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-2">
-        <div className="text-[11px] font-semibold uppercase tracking-widest text-faint">
-          Recent spikes
-        </div>
-        <div className="mt-3 space-y-2">
-          {SPIKES.map((sp) => (
-            <div
-              key={sp.term}
-              className="flex items-center gap-3 rounded-xl border border-line bg-card px-3 py-2.5"
-            >
-              <span className="grid h-7 w-7 place-items-center rounded-lg bg-lime/15 text-sm text-lime">↗</span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">“{sp.term}”</div>
-                <div className="text-xs text-muted">{sp.factor} above baseline</div>
-              </div>
-              <span className="font-mono text-[11px] text-faint">{sp.ageLabel}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </aside>
-  );
-}
-
 function EmptyView({ title, note }: { title: string; note: string }) {
   return (
     <div className="grid flex-1 place-items-center px-6 py-20 text-center">
@@ -351,7 +283,6 @@ export default function App() {
   const [signals, setSignals] = useState<Signal[]>(SEED_SIGNALS);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
-  const [eventsPerHour, setEventsPerHour] = useState(128);
 
   // Age timestamps once a second.
   useEffect(() => {
@@ -368,7 +299,6 @@ export default function App() {
       const base = LIVE_POOL[poolRef.current % LIVE_POOL.length];
       poolRef.current += 1;
       setSignals((prev) => [{ ...base, id: nextId(), ageSec: 1, read: false }, ...prev].slice(0, 40));
-      setEventsPerHour((n) => n + Math.floor(Math.random() * 3) + 1);
     }, 11000);
     return () => clearInterval(t);
   }, []);
@@ -500,8 +430,6 @@ export default function App() {
           </div>
         )}
       </main>
-
-      <LiveActivity eventsPerHour={eventsPerHour} />
     </div>
   );
 }

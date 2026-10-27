@@ -36,6 +36,12 @@ export const LIVE_TRACKS = {
   "full-stack": { name: "Full Stack Engineer", match: (t) => /full[\s-]?stack/i.test(t) && hasEng(t) },
   "backend": { name: "Backend Engineer", match: (t) => /\bback[\s-]?end\b/i.test(t) && hasEng(t) },
   "frontend": { name: "Front-end Engineer", match: (t) => /\bfront[\s-]?end\b/i.test(t) && hasEng(t) },
+  "india-tech": {
+    name: "India Tech Hiring",
+    indiaOnly: true,
+    match: (t) =>
+      /\b(engineer|developer|sde|programmer|software|data|analyst|devops|qa|architect|intern|ai|ml|python|java|full[\s-]?stack|back[\s-]?end|front[\s-]?end|tech|roles|fresher|walk[\s-]?in|hiring)\b/i.test(t),
+  },
 };
 
 const INDIA = /\b(india|bengaluru|bangalore|mumbai|new delhi|delhi|gurgaon|gurugram|hyderabad|pune|chennai|noida|kolkata|ahmedabad|remote[- ]?india)\b/i;
@@ -51,6 +57,7 @@ const PRETTY = {
   perplexity: "Perplexity", sierra: "Sierra", langchain: "LangChain", decagon: "Decagon", baseten: "Baseten",
   cohere: "Cohere", ramp: "Ramp", vanta: "Vanta", replit: "Replit", writer: "Writer", fireworks: "Fireworks AI",
   linear: "Linear", hex: "Hex", posthog: "PostHog", observeai: "Observe.AI",
+  sigmoid: "Sigmoid", zeta: "Zeta", mindtickle: "Mindtickle", atlan: "Atlan",
 };
 const pretty = (s) => PRETTY[s] || s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -61,9 +68,9 @@ function hash(str) {
 }
 
 // ── sources (verified working boards) ────────────────────────────────────────
-const GREENHOUSE = ["databricks", "mongodb", "gitlab", "druva", "groww", "anthropic", "figma", "scaleai"];
-const LEVER = ["meesho", "cred"];
-const ASHBY = ["harvey", "openai", "cursor", "cognition", "elevenlabs", "notion", "perplexity", "sierra", "langchain", "decagon", "baseten", "cohere", "ramp", "vanta", "replit", "writer", "fireworks", "linear", "hex"];
+const GREENHOUSE = ["databricks", "mongodb", "gitlab", "druva", "groww", "sigmoid", "anthropic", "figma", "scaleai"];
+const LEVER = ["meesho", "cred", "zeta", "mindtickle"];
+const ASHBY = ["harvey", "openai", "cursor", "cognition", "elevenlabs", "notion", "perplexity", "sierra", "langchain", "decagon", "baseten", "cohere", "ramp", "vanta", "replit", "writer", "fireworks", "linear", "hex", "atlan"];
 const FRONTLINE_CAT = 367;
 
 async function fromGreenhouse(token) {
@@ -150,6 +157,7 @@ export async function getListings(trackId, { limit = 60, perCompany = 5 } = {}) 
     if (!track.match(text)) continue;
     const region = r.india ? "india" : r.source === "remoteok" ? "remote" : regionOf(`${r.loc} ${r.matchText || ""}`);
     if (!region) continue;
+    if (track.indiaOnly && region !== "india") continue;
     const key = (r.company + "|" + r.role).toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);

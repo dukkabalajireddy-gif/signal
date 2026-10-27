@@ -28,7 +28,7 @@ export type Lead = "hot" | "warm" | "cold";
 export type Status = "open" | "archived";
 
 // Tracks that pull REAL live data from /api/signals. The rest stay simulated.
-export const LIVE_TRACK_IDS = ["forward-deployed", "ai-engineer", "full-stack", "backend", "frontend"] as const;
+export const LIVE_TRACK_IDS = ["forward-deployed", "ai-engineer", "full-stack", "backend", "frontend", "india-tech"] as const;
 export const isLiveTrack = (id: string) => (LIVE_TRACK_IDS as readonly string[]).includes(id);
 
 export interface Track {
@@ -83,6 +83,7 @@ export const TRACKS: Track[] = [
   { id: "intern", name: "Software/AI Engineering Intern" },
   { id: "ai-pm", name: "AI Product Manager" },
   { id: "gtm", name: "GTM Engineer" },
+  { id: "india-tech", name: "India Tech Hiring" },
 ];
 
 const COMPANIES: [string, string][] = [

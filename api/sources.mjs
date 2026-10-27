@@ -152,8 +152,8 @@ async function pool(items, fn, size = 12) {
 
 // in-memory cache so track calls share one fetch
 let cache = { at: 0, raw: null };
-async function allRaw() {
-  if (cache.raw && Date.now() - cache.at < 9 * 60000) return cache.raw;
+async function allRaw(force = false) {
+  if (!force && cache.raw && Date.now() - cache.at < 9 * 60000) return cache.raw;
   const [gh, lv, as, rok, hn, fl] = await Promise.all([
     pool(GREENHOUSE, fromGreenhouse), pool(LEVER, fromLever), pool(ASHBY, fromAshby), fromRemoteOK(), fromHN(), fromFrontline(),
   ]);
@@ -170,10 +170,10 @@ function leadOf(region, postedMs) {
 const SOURCE_LABEL = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", remoteok: "RemoteOK", hackernews: "Hacker News", frontline: "Frontline Media" };
 
 // Returns listings for one live track, India-first, capped per company.
-export async function getListings(trackId, { limit = 60, perCompany = 5 } = {}) {
+export async function getListings(trackId, { limit = 60, perCompany = 5, fresh = false } = {}) {
   const track = LIVE_TRACKS[trackId];
   if (!track) return [];
-  const raw = await allRaw();
+  const raw = await allRaw(fresh);
   const seen = new Set();
   const matched = [];
   for (const r of raw) {

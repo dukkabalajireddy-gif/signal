@@ -14,11 +14,12 @@ function localApi(): Plugin {
         try {
           const url = new URL(req.url ?? "", "http://localhost");
           const track = url.searchParams.get("track") ?? "";
+          const fresh = url.searchParams.get("fresh") != null;
           const modUrl = pathToFileURL(path.join(process.cwd(), "api/sources.mjs")).href;
           const mod = (await import(modUrl)) as {
-            getListings: (t: string) => Promise<unknown[]>;
+            getListings: (t: string, o?: { fresh?: boolean }) => Promise<unknown[]>;
           };
-          const listings = await mod.getListings(track);
+          const listings = await mod.getListings(track, { fresh });
           res.setHeader("content-type", "application/json");
           res.end(JSON.stringify({ track, count: listings.length, listings }));
         } catch (e) {

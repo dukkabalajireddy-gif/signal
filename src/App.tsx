@@ -44,6 +44,40 @@ function relTime(ageSec: number): string {
   return `${Math.floor(ageSec / 86400)}d ago`;
 }
 
+function relTimeShort(ms: number): string {
+  const s = Math.round((Date.now() - ms) / 1000);
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  return `${Math.floor(s / 3600)}h ago`;
+}
+
+function RefreshButton({
+  onClick,
+  refreshing,
+  lastFetched,
+}: {
+  onClick: () => void;
+  refreshing?: boolean;
+  lastFetched?: number | null;
+}) {
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={onClick}
+        disabled={refreshing}
+        className="inline-flex items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2 text-sm text-text transition-colors hover:border-lime/50 disabled:opacity-60"
+      >
+        <span className={`inline-block ${refreshing ? "animate-spin" : ""}`}>↻</span>
+        {refreshing ? "Refreshing…" : "Refresh"}
+      </button>
+      {lastFetched != null && !refreshing && (
+        <span className="text-[11px] text-faint">Refreshed {relTimeShort(lastFetched)}</span>
+      )}
+    </div>
+  );
+}
+
 function PlatformDot({ platform }: { platform: Platform }) {
   return (
     <span
@@ -247,10 +281,16 @@ function TracksGrid({
   listings,
   liveState,
   onOpenTrack,
+  onRefresh,
+  refreshing,
+  lastFetched,
 }: {
   listings: Listing[];
   liveState: LiveState;
   onOpenTrack: (id: string) => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+  lastFetched: number | null;
 }) {
   const stats = useMemo(() => {
     const m = new Map<string, { open: number; neu: number; sources: Set<Platform>; last: number }>();
@@ -269,14 +309,19 @@ function TracksGrid({
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8 lg:px-10">
-      <div className="text-[11px] font-semibold uppercase tracking-widest text-lime">
-        <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-lime align-middle" />
-        B2B Opportunities · India
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-widest text-lime">
+            <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-lime align-middle" />
+            B2B Opportunities · India
+          </div>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Tracks</h1>
+          <p className="mt-1.5 text-sm text-muted">
+            Topics BabbleBots.ai is monitoring across job boards and social. Open a track to see live demand signals.
+          </p>
+        </div>
+        <RefreshButton onClick={onRefresh} refreshing={refreshing} lastFetched={lastFetched} />
       </div>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">Tracks</h1>
-      <p className="mt-1.5 text-sm text-muted">
-        Topics BabbleBots.ai is monitoring across job boards and social. Open a track to see live demand signals.
-      </p>
 
       <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {TRACKS.map((t) => {
@@ -392,6 +437,7 @@ function TrackDetail({
   live,
   status,
   onBack,
+  onRefresh,
   onToggleArchive,
   onDelete,
 }: {
@@ -401,6 +447,7 @@ function TrackDetail({
   live?: boolean;
   status?: "loading" | "ok" | "error";
   onBack: () => void;
+  onRefresh: () => void;
   onToggleArchive: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
@@ -443,14 +490,26 @@ function TrackDetail({
             <span className="font-medium text-text">{track.name}</span>
           </div>
         </div>
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint">⌕</span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search company or role"
-            className="w-56 rounded-xl border border-line bg-panel py-2 pl-9 pr-3 text-sm text-text placeholder:text-faint focus:border-lime/60 focus:outline-none"
-          />
+        <div className="flex items-center gap-2">
+          {live && (
+            <button
+              onClick={onRefresh}
+              disabled={status === "loading"}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-panel px-3 py-2 text-sm text-text transition-colors hover:border-lime/50 disabled:opacity-60"
+            >
+              <span className={`inline-block ${status === "loading" ? "animate-spin" : ""}`}>↻</span>
+              {status === "loading" ? "…" : "Refresh"}
+            </button>
+          )}
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint">⌕</span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search company or role"
+              className="w-48 rounded-xl border border-line bg-panel py-2 pl-9 pr-3 text-sm text-text placeholder:text-faint focus:border-lime/60 focus:outline-none"
+            />
+          </div>
         </div>
       </div>
 
@@ -553,27 +612,29 @@ export default function App() {
   const [liveState, setLiveState] = useState<LiveState>(() =>
     Object.fromEntries(LIVE_TRACK_IDS.map((id) => [id, "loading"])),
   );
+  const [lastFetched, setLastFetched] = useState<number | null>(null);
 
-  // Pull real listings for the live tracks from the backend.
-  useEffect(() => {
-    let cancelled = false;
-    LIVE_TRACK_IDS.forEach(async (id) => {
-      try {
-        const r = await fetch(`/api/signals?track=${id}`);
-        const data = await r.json();
-        if (cancelled) return;
+  // Fetch one live track; `fresh` forces a re-scrape past the cache.
+  const loadTrack = (id: string, fresh = false) => {
+    setLiveState((s) => ({ ...s, [id]: "loading" }));
+    fetch(`/api/signals?track=${id}${fresh ? "&fresh=1" : ""}`)
+      .then((r) => r.json())
+      .then((data) => {
         const fetched: Listing[] = (Array.isArray(data.listings) ? data.listings : []).filter(
           (l: Listing) => !isHidden(l.id),
         );
         setListings((prev) => [...prev.filter((l) => l.trackId !== id), ...fetched]);
         setLiveState((s) => ({ ...s, [id]: "ok" }));
-      } catch {
-        if (!cancelled) setLiveState((s) => ({ ...s, [id]: "error" }));
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
+        setLastFetched(Date.now());
+      })
+      .catch(() => setLiveState((s) => ({ ...s, [id]: "error" })));
+  };
+  const refreshAll = () => LIVE_TRACK_IDS.forEach((id) => loadTrack(id, true));
+
+  // Initial load of all live tracks.
+  useEffect(() => {
+    LIVE_TRACK_IDS.forEach((id) => loadTrack(id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Age timestamps.
@@ -658,11 +719,19 @@ export default function App() {
             live={isLiveTrack(track.id)}
             status={liveState[track.id]}
             onBack={() => setActiveTrack(null)}
+            onRefresh={() => loadTrack(track.id, true)}
             onToggleArchive={toggleArchive}
             onDelete={deleteListing}
           />
         ) : (
-          <TracksGrid listings={listings} liveState={liveState} onOpenTrack={openTrack} />
+          <TracksGrid
+            listings={listings}
+            liveState={liveState}
+            onOpenTrack={openTrack}
+            onRefresh={refreshAll}
+            refreshing={Object.values(liveState).some((v) => v === "loading")}
+            lastFetched={lastFetched}
+          />
         )}
       </main>
     </div>

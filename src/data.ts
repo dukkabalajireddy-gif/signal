@@ -24,12 +24,16 @@ export type Platform =
   | "remoteok"
   | "hackernews"
   | "frontline"
-  | "jobalertshub";
+  | "jobalertshub"
+  | "gemini";
 export type Lead = "hot" | "warm" | "cold";
 export type Status = "open" | "archived";
 
 // Tracks that pull REAL live data from /api/signals. The rest stay simulated.
-export const LIVE_TRACK_IDS = ["forward-deployed", "ai-engineer", "full-stack", "backend", "frontend", "india-tech", "ai-pm", "gtm", "intern"] as const;
+export const LIVE_TRACK_IDS = ["forward-deployed", "ai-engineer", "full-stack", "backend", "frontend", "india-tech", "ai-pm", "gtm", "intern", "gcc"] as const;
+
+// The GCC track uses the Gemini-powered /api/gcc endpoint instead of /api/signals.
+export const GCC_TRACK_ID = "gcc";
 export const isLiveTrack = (id: string) => (LIVE_TRACK_IDS as readonly string[]).includes(id);
 
 export interface Track {
@@ -48,6 +52,7 @@ export interface Listing {
   sourceLabel: string; // "Naukri.com", "r/developersIndia", ...
   url: string; // original listing (demo → source homepage)
   location?: string; // "India" / "Remote" for live listings
+  contact?: string; // public TA/recruiter contact (GCC discovery)
   lead: Lead;
   postedSec: number; // seconds since posted
   status: Status;
@@ -67,6 +72,7 @@ export const PLATFORM_META: Record<Platform, { label: string; dot: string }> = {
   hackernews: { label: "Hacker News", dot: "#ff6600" },
   frontline: { label: "Frontline Media", dot: "#ff8a3d" },
   jobalertshub: { label: "Job Alerts Hub", dot: "#f0c04a" },
+  gemini: { label: "Gemini", dot: "#8ab4f8" },
 };
 
 export const LEAD_META: Record<Lead, { label: string; fg: string; bg: string }> = {
@@ -86,6 +92,7 @@ export const TRACKS: Track[] = [
   { id: "ai-pm", name: "AI Product Manager" },
   { id: "gtm", name: "GTM Engineer" },
   { id: "india-tech", name: "India Tech Hiring" },
+  { id: "gcc", name: "GCC Hiring · India" },
 ];
 
 const COMPANIES: [string, string][] = [

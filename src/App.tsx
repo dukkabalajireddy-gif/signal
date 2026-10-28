@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  GCC_TRACK_ID,
   isLiveTrack,
   LEAD_META,
   LIVE_TRACK_IDS,
@@ -13,7 +14,8 @@ import {
   type Track,
 } from "./data";
 
-type LiveState = Record<string, "loading" | "ok" | "error">;
+type TrackStatus = "loading" | "ok" | "error" | "unconfigured";
+type LiveState = Record<string, TrackStatus>;
 
 // Per-browser persistence for archive/delete decisions, so a reload keeps them.
 const ARCH_KEY = "signal.archived.v1";
@@ -207,11 +209,12 @@ function TrackCard({
   sources: Platform[];
   lastSec: number;
   live?: boolean;
-  status?: "loading" | "ok" | "error";
+  status?: TrackStatus;
   onOpen: () => void;
 }) {
   const loading = live && status === "loading";
   const error = live && status === "error";
+  const setup = live && status === "unconfigured";
   return (
     <button
       onClick={onOpen}
@@ -236,7 +239,7 @@ function TrackCard({
       <div className="mt-6 flex items-end justify-between">
         <div>
           <div className="font-mono text-2xl font-semibold leading-none">
-            {loading ? "…" : error ? "—" : openCount}
+            {loading ? "…" : error ? "—" : setup ? "⚙" : openCount}
           </div>
           <div className="mt-1 text-xs text-muted">open signals</div>
         </div>
@@ -255,9 +258,11 @@ function TrackCard({
             ? "Fetching live signals…"
             : error
               ? "Couldn't load live data"
-              : openCount > 0
-                ? `Updated ${relTime(lastSec)}`
-                : "No signals yet"}
+              : setup
+                ? "Add Gemini key to enable"
+                : openCount > 0
+                  ? `Updated ${relTime(lastSec)}`
+                  : "No signals yet"}
         </span>
         <span className="text-muted transition-transform group-hover:translate-x-0.5">→</span>
       </div>
@@ -396,6 +401,13 @@ function ListingRow({
           </span>
           <span>· {relTime(l.postedSec)}</span>
         </div>
+
+        {l.contact && (
+          <div className="mt-1.5 text-xs">
+            <span className="text-faint">Contact: </span>
+            <span className="select-all font-medium text-lime">{l.contact}</span>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2 sm:flex-col sm:items-end">
@@ -445,12 +457,13 @@ function TrackDetail({
   open: Listing[];
   archived: Listing[];
   live?: boolean;
-  status?: "loading" | "ok" | "error";
+  status?: TrackStatus;
   onBack: () => void;
   onRefresh: () => void;
   onToggleArchive: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
+  const isGcc = track.id === GCC_TRACK_ID;
   const [tab, setTab] = useState<StatusTab>("open");
   const [query, setQuery] = useState("");
 
@@ -518,14 +531,22 @@ function TrackDetail({
         {live && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-lime/40 px-2.5 py-1 text-[11px] font-semibold text-lime">
             <span className="h-1.5 w-1.5 rounded-full bg-lime animate-pulse-dot" />
-            {status === "loading" ? "Fetching…" : status === "error" ? "Live · error" : "Live"}
+            {status === "loading"
+              ? "Fetching…"
+              : status === "error"
+                ? "Live · error"
+                : status === "unconfigured"
+                  ? "Needs key"
+                  : "Live"}
           </span>
         )}
       </div>
       <p className="mt-1 text-sm text-muted">
-        {live
-          ? "Real openings pulled from job boards & communities — India-based or remote."
-          : "Companies showing active demand for this role across India."}
+        {isGcc
+          ? "Global capability centers hiring in India, discovered via Gemini — verify each through its careers link."
+          : live
+            ? "Real openings pulled from job boards & communities — India-based or remote."
+            : "Companies showing active demand for this role across India."}
       </p>
 
       {/* tabs */}
@@ -553,13 +574,17 @@ function TrackDetail({
       <div className="mt-5 space-y-3 pb-10">
         {visible.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line px-6 py-14 text-center text-sm text-muted">
-            {live && status === "loading"
-              ? "Fetching live signals from job boards & communities…"
-              : live && status === "error"
-                ? "Couldn't reach the live sources. Try again shortly."
-                : tab === "open"
-                  ? "No open signals here yet. New ones stream in as they're detected."
-                  : "Nothing archived yet. Archive a signal to park it here."}
+            {live && status === "unconfigured"
+              ? "Add your GEMINI_API_KEY in Vercel (Settings → Environment Variables), then hit Refresh to discover GCCs."
+              : live && status === "loading"
+                ? isGcc
+                  ? "Asking Gemini for GCCs hiring in India…"
+                  : "Fetching live signals from job boards & communities…"
+                : live && status === "error"
+                  ? "Couldn't reach the live sources. Try again shortly."
+                  : tab === "open"
+                    ? "No open signals here yet. New ones stream in as they're detected."
+                    : "Nothing archived yet. Archive a signal to park it here."}
           </div>
         ) : (
           visible.map((l) => (
@@ -617,9 +642,17 @@ export default function App() {
   // Fetch one live track; `fresh` forces a re-scrape past the cache.
   const loadTrack = (id: string, fresh = false) => {
     setLiveState((s) => ({ ...s, [id]: "loading" }));
-    fetch(`/api/signals?track=${id}${fresh ? "&fresh=1" : ""}`)
+    const url =
+      id === GCC_TRACK_ID
+        ? `/api/gcc${fresh ? "?fresh=1" : ""}`
+        : `/api/signals?track=${id}${fresh ? "&fresh=1" : ""}`;
+    fetch(url)
       .then((r) => r.json())
       .then((data) => {
+        if (data && data.configured === false) {
+          setLiveState((s) => ({ ...s, [id]: "unconfigured" }));
+          return;
+        }
         const fetched: Listing[] = (Array.isArray(data.listings) ? data.listings : []).filter(
           (l: Listing) => !isHidden(l.id),
         );

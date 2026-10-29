@@ -93,6 +93,11 @@ function hash(str) {
   return Math.abs(h).toString(36);
 }
 
+// Open links for aggregator sources go through /api/go, which resolves the post
+// to the company's real apply/careers page on click.
+const goUrl = (postUrl, company) =>
+  `/api/go?u=${encodeURIComponent(postUrl)}${company ? `&c=${encodeURIComponent(company)}` : ""}`;
+
 // ── sources (verified working boards) ────────────────────────────────────────
 const GREENHOUSE = ["databricks", "mongodb", "gitlab", "druva", "groww", "sigmoid", "anthropic", "figma", "scaleai"];
 const LEVER = ["meesho", "cred", "zeta", "mindtickle"];
@@ -152,7 +157,7 @@ async function fromFrontline() {
     const title = strip(p.title?.rendered || "");
     const excerpt = strip(p.excerpt?.rendered || "");
     for (const company of parseFrontlineCompanies(title)) {
-      out.push({ company, role: title.slice(0, 95), loc: title, url: p.link, source: "frontline", posted: p.date, matchText: `${title} ${excerpt}`, india: true });
+      out.push({ company, role: title.slice(0, 95), loc: title, url: goUrl(p.link, company), source: "frontline", posted: p.date, matchText: `${title} ${excerpt}`, india: true });
     }
   }
   return out;
@@ -190,7 +195,7 @@ async function fromJobAlertsHub() {
         .replace(/\bQa\b/g, "QA")
         .replace(/\bSde\b/g, "SDE"),
       loc: "India",
-      url: loc,
+      url: goUrl(loc),
       source: "jobalertshub",
       posted: mod,
       matchText: slug.replace(/-/g, " "),

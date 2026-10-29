@@ -46,6 +46,27 @@ function localApi(): Plugin {
           res.end(JSON.stringify({ configured: true, error: String(e), listings: [] }));
         }
       });
+
+      server.middlewares.use("/api/go", async (req, res) => {
+        try {
+          const url = new URL(req.url ?? "", "http://localhost");
+          const u = url.searchParams.get("u") || "";
+          const c = url.searchParams.get("c") || "";
+          const mod = (await importApi("apply.mjs")) as {
+            resolveApply: (u: string, c?: string) => Promise<string>;
+            allowedHost: (u: string) => boolean;
+          };
+          let target = u;
+          if (u && mod.allowedHost(u)) target = await mod.resolveApply(u, c);
+          res.statusCode = 302;
+          res.setHeader("Location", /^https?:\/\//.test(target) ? target : u || "/");
+          res.end();
+        } catch {
+          res.statusCode = 302;
+          res.setHeader("Location", "/");
+          res.end();
+        }
+      });
     },
   };
 }

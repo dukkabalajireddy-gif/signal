@@ -80,6 +80,21 @@ function RefreshButton({
   );
 }
 
+function RemoteToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      title="Show or hide remote (non-India) jobs"
+      className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors ${
+        on ? "border-lime/50 text-text" : "border-line text-muted hover:text-text"
+      }`}
+    >
+      <span className={`h-2 w-2 rounded-full ${on ? "bg-lime" : "bg-faint"}`} />
+      Remote {on ? "on" : "off"}
+    </button>
+  );
+}
+
 function PlatformDot({ platform }: { platform: Platform }) {
   return (
     <span
@@ -289,6 +304,8 @@ function TracksGrid({
   onRefresh,
   refreshing,
   lastFetched,
+  remoteOn,
+  onToggleRemote,
 }: {
   listings: Listing[];
   liveState: LiveState;
@@ -296,12 +313,15 @@ function TracksGrid({
   onRefresh: () => void;
   refreshing: boolean;
   lastFetched: number | null;
+  remoteOn: boolean;
+  onToggleRemote: () => void;
 }) {
   const stats = useMemo(() => {
     const m = new Map<string, { open: number; neu: number; sources: Set<Platform>; last: number }>();
     for (const t of TRACKS) m.set(t.id, { open: 0, neu: 0, sources: new Set(), last: Infinity });
     for (const l of listings) {
       if (l.status !== "open") continue;
+      if (!remoteOn && l.location === "Remote") continue;
       const s = m.get(l.trackId);
       if (!s) continue;
       s.open += 1;
@@ -310,7 +330,7 @@ function TracksGrid({
       s.last = Math.min(s.last, l.postedSec);
     }
     return m;
-  }, [listings]);
+  }, [listings, remoteOn]);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8 lg:px-10">
@@ -325,7 +345,10 @@ function TracksGrid({
             Topics BabbleBots.ai is monitoring across job boards and social. Open a track to see live demand signals.
           </p>
         </div>
-        <RefreshButton onClick={onRefresh} refreshing={refreshing} lastFetched={lastFetched} />
+        <div className="flex items-start gap-3">
+          <RemoteToggle on={remoteOn} onToggle={onToggleRemote} />
+          <RefreshButton onClick={onRefresh} refreshing={refreshing} lastFetched={lastFetched} />
+        </div>
       </div>
 
       <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -449,6 +472,7 @@ function TrackDetail({
   live,
   status,
   message,
+  remoteOn,
   onBack,
   onRefresh,
   onToggleArchive,
@@ -460,6 +484,7 @@ function TrackDetail({
   live?: boolean;
   status?: TrackStatus;
   message?: string;
+  remoteOn?: boolean;
   onBack: () => void;
   onRefresh: () => void;
   onToggleArchive: (id: string) => void;
@@ -470,8 +495,9 @@ function TrackDetail({
   const [tab, setTab] = useState<StatusTab>("open");
   const [query, setQuery] = useState("");
 
-  const openMine = open.filter((l) => l.trackId === track.id);
-  const archivedMine = archived.filter((l) => l.trackId === track.id);
+  const keepRemote = (l: Listing) => remoteOn || l.location !== "Remote";
+  const openMine = open.filter((l) => l.trackId === track.id && keepRemote(l));
+  const archivedMine = archived.filter((l) => l.trackId === track.id && keepRemote(l));
   const openCount = openMine.length;
   const archivedCount = archivedMine.length;
 
@@ -650,6 +676,13 @@ export default function App() {
   );
   const [lastFetched, setLastFetched] = useState<number | null>(null);
   const [messages, setMessages] = useState<Record<string, string>>({});
+  const [remoteOn, setRemoteOn] = useState<boolean>(() => loadJSON<boolean>("signal.remoteOn", true));
+  const toggleRemote = () =>
+    setRemoteOn((v) => {
+      const n = !v;
+      saveJSON("signal.remoteOn", n);
+      return n;
+    });
 
   // Fetch one live track; `fresh` forces a re-scrape past the cache.
   const loadTrack = (id: string, fresh = false) => {
@@ -770,6 +803,7 @@ export default function App() {
             live={isLiveTrack(track.id)}
             status={liveState[track.id]}
             message={messages[track.id]}
+            remoteOn={remoteOn}
             onBack={() => setActiveTrack(null)}
             onRefresh={() => loadTrack(track.id, true)}
             onToggleArchive={toggleArchive}
@@ -783,6 +817,8 @@ export default function App() {
             onRefresh={refreshAll}
             refreshing={Object.values(liveState).some((v) => v === "loading")}
             lastFetched={lastFetched}
+            remoteOn={remoteOn}
+            onToggleRemote={toggleRemote}
           />
         )}
       </main>

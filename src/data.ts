@@ -60,6 +60,19 @@ export interface Listing {
   viewed: boolean;
 }
 
+// ── Pipeline (sales funnel) ──────────────────────────────────────────────────
+export type Stage = "spotted" | "researching" | "reached" | "replied" | "posted";
+export const STAGES: { id: Stage; label: string }[] = [
+  { id: "spotted", label: "Spotted" },
+  { id: "researching", label: "Researching" },
+  { id: "reached", label: "Reached out" },
+  { id: "replied", label: "Replied" },
+  { id: "posted", label: "Posted" },
+];
+export interface PipelineItem extends Listing {
+  stage: Stage;
+}
+
 export const PLATFORM_META: Record<Platform, { label: string; dot: string }> = {
   naukri: { label: "Naukri.com", dot: "#4a7cff" },
   linkedin: { label: "LinkedIn", dot: "#4aa3ff" },

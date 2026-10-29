@@ -7,10 +7,13 @@ import {
   makeLiveListing,
   PLATFORM_META,
   SEED_LISTINGS,
+  STAGES,
   TRACKS,
   type Lead,
   type Listing,
+  type PipelineItem,
   type Platform,
+  type Stage,
   type Track,
 } from "./data";
 
@@ -20,6 +23,7 @@ type LiveState = Record<string, TrackStatus>;
 // Per-browser persistence for archive/delete decisions, so a reload keeps them.
 const ARCH_KEY = "signal.archived.v1";
 const DEL_KEY = "signal.deleted.v1";
+const PIPE_KEY = "signal.pipeline.v1";
 function loadJSON<T>(key: string, fallback: T): T {
   try {
     const v = localStorage.getItem(key);
@@ -172,10 +176,12 @@ function Sidebar({
   nav,
   setNav,
   totalNew,
+  pipelineCount,
 }: {
   nav: Nav;
   setNav: (n: Nav) => void;
   totalNew: number;
+  pipelineCount: number;
 }) {
   return (
     <aside className="hidden w-[240px] shrink-0 flex-col border-r border-line bg-panel px-4 py-5 md:flex">
@@ -185,7 +191,7 @@ function Sidebar({
 
       <nav className="mt-7 space-y-1">
         <NavItem icon="📡" label="Client Signals" active={nav === "signals"} badge={totalNew || undefined} onClick={() => setNav("signals")} />
-        <NavItem icon="▦" label="Pipeline" active={nav === "pipeline"} onClick={() => setNav("pipeline")} />
+        <NavItem icon="▦" label="Pipeline" active={nav === "pipeline"} badge={pipelineCount || undefined} onClick={() => setNav("pipeline")} />
         <NavItem icon="✦" label="Insights" active={nav === "insights"} onClick={() => setNav("insights")} />
       </nav>
 
@@ -379,10 +385,14 @@ function TracksGrid({
 
 function ListingRow({
   l,
+  inPipeline,
+  onAddToPipeline,
   onToggleArchive,
   onDelete,
 }: {
   l: Listing;
+  inPipeline?: boolean;
+  onAddToPipeline?: (l: Listing) => void;
   onToggleArchive: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
@@ -442,6 +452,19 @@ function ListingRow({
         >
           Open ↗
         </a>
+        {onAddToPipeline && (
+          <button
+            onClick={() => onAddToPipeline(l)}
+            disabled={inPipeline}
+            className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+              inPipeline
+                ? "cursor-default border-lime/40 text-lime"
+                : "border-line text-text hover:border-lime/50"
+            }`}
+          >
+            {inPipeline ? "✓ In pipeline" : "＋ Pipeline"}
+          </button>
+        )}
         <div className="flex items-center gap-3">
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted hover:text-text">
             <input
@@ -473,6 +496,8 @@ function TrackDetail({
   status,
   message,
   remoteOn,
+  pipelineIds,
+  onAddToPipeline,
   onBack,
   onRefresh,
   onToggleArchive,
@@ -485,6 +510,8 @@ function TrackDetail({
   status?: TrackStatus;
   message?: string;
   remoteOn?: boolean;
+  pipelineIds: Set<string>;
+  onAddToPipeline: (l: Listing) => void;
   onBack: () => void;
   onRefresh: () => void;
   onToggleArchive: (id: string) => void;
@@ -626,7 +653,13 @@ function TrackDetail({
         ) : (
           visible.map((l) => (
             <div key={l.id} className={l.id.startsWith("live-") ? "animate-signal-in" : ""}>
-              <ListingRow l={l} onToggleArchive={onToggleArchive} onDelete={onDelete} />
+              <ListingRow
+                l={l}
+                inPipeline={pipelineIds.has(l.id)}
+                onAddToPipeline={onAddToPipeline}
+                onToggleArchive={onToggleArchive}
+                onDelete={onDelete}
+              />
             </div>
           ))
         )}
@@ -652,6 +685,125 @@ function EmptyView({ title, note }: { title: string; note: string }) {
   );
 }
 
+function PipelineCard({
+  item,
+  canPrev,
+  canNext,
+  onPrev,
+  onNext,
+  onRemove,
+}: {
+  item: PipelineItem;
+  canPrev: boolean;
+  canNext: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-line bg-card p-3">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-sm font-medium leading-snug">{item.company}</span>
+        <button onClick={onRemove} aria-label="Remove from pipeline" className="shrink-0 text-faint hover:text-[#ff6a6a]">
+          ✕
+        </button>
+      </div>
+      <div className="mt-0.5 line-clamp-2 text-xs text-muted">{item.role}</div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-faint">
+        <LeadBadge lead={item.lead} />
+        {item.location && <span>{item.location}</span>}
+      </div>
+      <div className="mt-2.5 flex items-center justify-between gap-2">
+        <div className="flex gap-1">
+          <button onClick={onPrev} disabled={!canPrev} title="Previous stage" className="rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:text-text disabled:opacity-30">
+            ←
+          </button>
+          <button onClick={onNext} disabled={!canNext} title="Next stage" className="rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:text-text disabled:opacity-30">
+            →
+          </button>
+        </div>
+        <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-lime hover:underline">
+          Open ↗
+        </a>
+      </div>
+      {item.contact && (
+        <div className="mt-1.5 truncate text-[11px]">
+          <span className="text-faint">Contact: </span>
+          <span className="select-all text-lime">{item.contact}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PipelineBoard({
+  pipeline,
+  onMove,
+  onRemove,
+  onGoTracks,
+}: {
+  pipeline: PipelineItem[];
+  onMove: (id: string, stage: Stage) => void;
+  onRemove: (id: string) => void;
+  onGoTracks: () => void;
+}) {
+  return (
+    <div className="mx-auto w-full max-w-6xl px-6 py-8 lg:px-10">
+      <div className="text-[11px] font-semibold uppercase tracking-widest text-lime">
+        <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-lime align-middle" />
+        Conversion funnel
+      </div>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight">Pipeline</h1>
+      <p className="mt-1.5 text-sm text-muted">
+        Move leads from Spotted to Posted on BabbleBots. {pipeline.length} lead
+        {pipeline.length === 1 ? "" : "s"}.
+      </p>
+
+      {pipeline.length === 0 ? (
+        <div className="mt-7 rounded-2xl border border-dashed border-line px-6 py-16 text-center text-sm text-muted">
+          No leads yet. Open a track and hit <span className="font-medium text-text">＋ Pipeline</span> on a lead to start.
+          <div className="mt-4">
+            <button onClick={onGoTracks} className="rounded-xl border border-line bg-panel px-3 py-2 text-sm text-text transition-colors hover:border-lime/50">
+              Go to tracks
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-6 flex gap-4 overflow-x-auto pb-4">
+          {STAGES.map((stage, si) => {
+            const items = pipeline.filter((p) => p.stage === stage.id);
+            return (
+              <div key={stage.id} className="flex w-[250px] shrink-0 flex-col">
+                <div className="flex items-center justify-between rounded-t-xl border border-line bg-panel px-3 py-2.5">
+                  <span className="text-sm font-medium">{stage.label}</span>
+                  <span className="rounded-full bg-line px-2 py-0.5 text-[11px] text-muted">{items.length}</span>
+                </div>
+                <div className="flex flex-1 flex-col gap-2 rounded-b-xl border border-t-0 border-line bg-ink/40 p-2">
+                  {items.length === 0 ? (
+                    <div className="px-2 py-6 text-center text-xs text-faint">—</div>
+                  ) : (
+                    items.map((p) => (
+                      <PipelineCard
+                        key={p.id}
+                        item={p}
+                        canPrev={si > 0}
+                        canNext={si < STAGES.length - 1}
+                        onPrev={() => onMove(p.id, STAGES[si - 1].id)}
+                        onNext={() => onMove(p.id, STAGES[si + 1].id)}
+                        onRemove={() => onRemove(p.id)}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [nav, setNav] = useState<Nav>("signals");
   const [activeTrack, setActiveTrack] = useState<string | null>(null);
@@ -667,6 +819,22 @@ export default function App() {
   };
   const isHidden = (id: string) =>
     deletedRef.current.has(id) || archivedRef.current.some((a) => a.id === id);
+
+  // Pipeline (sales funnel), persisted per browser.
+  const pipelineRef = useRef<PipelineItem[]>(loadJSON<PipelineItem[]>(PIPE_KEY, []));
+  const [pipeline, setPipelineState] = useState<PipelineItem[]>(pipelineRef.current);
+  const setPipeline = (updater: (prev: PipelineItem[]) => PipelineItem[]) => {
+    pipelineRef.current = updater(pipelineRef.current);
+    setPipelineState(pipelineRef.current);
+    saveJSON(PIPE_KEY, pipelineRef.current);
+  };
+  const addToPipeline = (l: Listing) => {
+    if (pipelineRef.current.some((p) => p.id === l.id)) return;
+    setPipeline((prev) => [{ ...l, stage: "spotted" }, ...prev]);
+  };
+  const moveStage = (id: string, stage: Stage) =>
+    setPipeline((prev) => prev.map((p) => (p.id === id ? { ...p, stage } : p)));
+  const removeFromPipeline = (id: string) => setPipeline((prev) => prev.filter((p) => p.id !== id));
 
   const [listings, setListings] = useState<Listing[]>(() =>
     SEED_LISTINGS.filter((l) => !isLiveTrack(l.trackId)).filter((l) => !isHidden(l.id)),
@@ -771,6 +939,7 @@ export default function App() {
     () => listings.filter((l) => l.status === "open" && !l.viewed).length,
     [listings],
   );
+  const pipelineIds = useMemo(() => new Set(pipeline.map((p) => p.id)), [pipeline]);
 
   const track = activeTrack ? TRACKS.find((t) => t.id === activeTrack) ?? null : null;
 
@@ -783,17 +952,21 @@ export default function App() {
           setActiveTrack(null);
         }}
         totalNew={totalNew}
+        pipelineCount={pipeline.length}
       />
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        {nav !== "signals" ? (
+        {nav === "pipeline" ? (
+          <PipelineBoard
+            pipeline={pipeline}
+            onMove={moveStage}
+            onRemove={removeFromPipeline}
+            onGoTracks={() => setNav("signals")}
+          />
+        ) : nav === "insights" ? (
           <EmptyView
-            title={nav === "pipeline" ? "Pipeline" : "Insights"}
-            note={
-              nav === "pipeline"
-                ? "Move the companies you care about through Spotted → Researching → Reached out → Replied. We'll wire this next."
-                : "Trends, winning tracks and source breakdowns over time. We'll wire this next."
-            }
+            title="Insights"
+            note="Trends, winning tracks and source breakdowns over time. We'll wire this next."
           />
         ) : track ? (
           <TrackDetail
@@ -804,6 +977,8 @@ export default function App() {
             status={liveState[track.id]}
             message={messages[track.id]}
             remoteOn={remoteOn}
+            pipelineIds={pipelineIds}
+            onAddToPipeline={addToPipeline}
             onBack={() => setActiveTrack(null)}
             onRefresh={() => loadTrack(track.id, true)}
             onToggleArchive={toggleArchive}

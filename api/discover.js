@@ -1,13 +1,12 @@
-// Vercel serverless function: GET /api/gcc
-// Gemini-powered GCC discovery. Cached 1h (LLM calls cost quota).
-import { discoverGCCs } from "./gemini.mjs";
+// Vercel serverless function: GET /api/discover?type=gcc|startup
+// Gemini-powered discovery. Cached 1h (LLM calls cost quota).
+import { discover } from "./gemini.mjs";
 
 export default async function handler(req, res) {
+  const type = (req.query?.type || "gcc").toString();
   const fresh = req.query?.fresh != null;
   try {
-    const result = await discoverGCCs(fresh);
-    // Only cache successful, non-empty results — so a "needs key"/error state
-    // self-heals on the next load once the key is live.
+    const result = await discover(type, fresh);
     const cacheable = result.configured && !result.error && (result.listings?.length ?? 0) > 0;
     res.setHeader(
       "Cache-Control",

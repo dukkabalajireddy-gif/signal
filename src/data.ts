@@ -30,10 +30,11 @@ export type Lead = "hot" | "warm" | "cold";
 export type Status = "open" | "archived";
 
 // Tracks that pull REAL live data from /api/signals. The rest stay simulated.
-export const LIVE_TRACK_IDS = ["forward-deployed", "ai-engineer", "full-stack", "backend", "frontend", "india-tech", "ai-pm", "gtm", "intern", "gcc"] as const;
+export const LIVE_TRACK_IDS = ["forward-deployed", "ai-engineer", "full-stack", "backend", "frontend", "india-tech", "ai-pm", "gtm", "intern", "gcc", "startup"] as const;
 
-// The GCC track uses the Gemini-powered /api/gcc endpoint instead of /api/signals.
-export const GCC_TRACK_ID = "gcc";
+// These tracks use the Gemini-powered /api/discover endpoint instead of /api/signals.
+export const GEMINI_TRACK_IDS = ["gcc", "startup"] as const;
+export const isGeminiTrack = (id: string) => (GEMINI_TRACK_IDS as readonly string[]).includes(id);
 export const isLiveTrack = (id: string) => (LIVE_TRACK_IDS as readonly string[]).includes(id);
 
 export interface Track {
@@ -93,6 +94,7 @@ export const TRACKS: Track[] = [
   { id: "gtm", name: "GTM Engineer" },
   { id: "india-tech", name: "India Tech Hiring" },
   { id: "gcc", name: "GCC Hiring · India" },
+  { id: "startup", name: "Startup Hiring · India" },
 ];
 
 const COMPANIES: [string, string][] = [

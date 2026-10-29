@@ -1,10 +1,9 @@
-// Gemini-powered GCC discovery.
+// Gemini-powered discovery (GCCs and startups).
 //
-// Finds GCCs / global companies' India offices hiring AI & software talent,
-// with a careers page and any PUBLIC talent-acquisition contact — each meant
-// to be verified via the careers link. Reads the key from env (set it in
-// Vercel). Without a key it returns { configured: false } so the UI can show a
-// setup message.
+// Finds companies hiring AI & software talent in India, with a careers page and
+// any PUBLIC talent-acquisition contact — each meant to be verified via the
+// careers link. Reads the key from env (set it in Vercel). Without a key it
+// returns { configured: false } so the UI can show a setup message.
 
 const MODELS = ["gemini-3.8-flash", "gemini-flash-latest"];
 
@@ -48,19 +47,23 @@ function extractArray(text) {
   return null;
 }
 
-const PROMPT = `List 12 to 15 Global Capability Centers (GCCs) or global companies' India offices (captive centers) that hire AI/ML and software engineering talent in India. Prefer ones actively hiring right now.
-For each, return a JSON object:
-{"company": string, "city": string (an Indian city where they hire), "role": string (a representative AI/ML or software role), "careersUrl": string (their India careers/jobs page URL), "contact": string (a PUBLIC talent-acquisition email or recruiter page URL if known, else "")}
+const SHAPE = `For each, return a JSON object:
+{"company": string, "city": string (an Indian city where they hire), "role": string (a representative AI/ML or software role), "careersUrl": string (their India careers/jobs page URL), "contact": string (a PUBLIC talent-acquisition / founder / recruiter email or page URL if known, else "")}
 Return ONLY a JSON array of these objects.`;
 
-// useSearch adds Google Search grounding (live web); without it we use JSON mode
-// for clean, parseable output straight from the model's knowledge.
-async function callModel(model, key, useSearch) {
+const PROMPTS = {
+  gcc: `List 12 to 15 Global Capability Centers (GCCs) or global companies' India offices (captive centers) that hire AI/ML and software engineering talent in India. Prefer ones actively hiring right now.
+${SHAPE}`,
+  startup: `List 12 to 15 EARLY-STAGE STARTUPS in India (roughly 20 to 50 employees, seed to Series A) that are actively hiring software / AI engineering talent and would likely be open to hiring fresh tier-1 college graduates (IIT, NIT, BITS, Manipal). Prefer well-known, recently funded Indian startups.
+${SHAPE}`,
+};
+
+async function callModel(model, key, prompt, useSearch) {
   const body = {
-    contents: [{ parts: [{ text: PROMPT }] }],
+    contents: [{ parts: [{ text: prompt }] }],
     generationConfig: useSearch
-      ? { temperature: 0.5 }
-      : { temperature: 0.4, responseMimeType: "application/json" },
+      ? { temperature: 0.6 }
+      : { temperature: 0.5, responseMimeType: "application/json" },
   };
   if (useSearch) body.tools = [{ google_search: {} }];
 
@@ -79,19 +82,19 @@ async function callModel(model, key, useSearch) {
   return { error: "", text };
 }
 
-let cache = { at: 0, data: null };
+const cache = {}; // keyed by type → { at, data }
 
-export async function discoverGCCs(fresh = false) {
+export async function discover(type, fresh = false) {
   const key = apiKey();
   if (!key) return { configured: false, listings: [] };
-  if (!fresh && cache.data && Date.now() - cache.at < 60 * 60000) return cache.data;
+  const prompt = PROMPTS[type] || PROMPTS.gcc;
+  if (!fresh && cache[type] && Date.now() - cache[type].at < 60 * 60000) return cache[type].data;
 
   const errors = [];
   let arr = null;
-  // Try with grounding first (live web), then without (model knowledge).
   outer: for (const useSearch of [true, false]) {
     for (const model of MODELS) {
-      const res = await callModel(model, key, useSearch);
+      const res = await callModel(model, key, prompt, useSearch);
       const tag = `${model}${useSearch ? "+search" : ""}`;
       if (res.error) {
         errors.push(`${tag}: ${res.error}`);
@@ -115,11 +118,11 @@ export async function discoverGCCs(fresh = false) {
   }
 
   const listings = arr.map((x, i) => ({
-    id: `gcc-${hash((x.company || "") + (x.role || "") + i)}`,
-    trackId: "gcc",
+    id: `${type}-${hash((x.company || "") + (x.role || "") + i)}`,
+    trackId: type,
     role: x.role || "AI / Software roles",
-    company: x.company || "GCC",
-    companySize: "",
+    company: x.company || (type === "startup" ? "Startup" : "GCC"),
+    companySize: type === "startup" ? "~20–50" : "",
     salary: "",
     platform: "gemini",
     sourceLabel: "Gemini · grounded",
@@ -133,6 +136,6 @@ export async function discoverGCCs(fresh = false) {
   }));
 
   const result = { configured: true, listings };
-  cache = { at: Date.now(), data: result };
+  cache[type] = { at: Date.now(), data: result };
   return result;
 }

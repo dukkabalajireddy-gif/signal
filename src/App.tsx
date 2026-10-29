@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  GCC_TRACK_ID,
+  isGeminiTrack,
   isLiveTrack,
   LEAD_META,
   LIVE_TRACK_IDS,
@@ -465,7 +465,8 @@ function TrackDetail({
   onToggleArchive: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
-  const isGcc = track.id === GCC_TRACK_ID;
+  const isGemini = isGeminiTrack(track.id);
+  const isStartup = track.id === "startup";
   const [tab, setTab] = useState<StatusTab>("open");
   const [query, setQuery] = useState("");
 
@@ -544,8 +545,10 @@ function TrackDetail({
         )}
       </div>
       <p className="mt-1 text-sm text-muted">
-        {isGcc
-          ? "Global capability centers hiring in India, discovered via Gemini — verify each through its careers link."
+        {isGemini
+          ? isStartup
+            ? "Early-stage Indian startups (~20–50 people) hiring — a fit for fresh tier-1 talent, discovered via Gemini. Verify via the careers link."
+            : "Global capability centers hiring in India, discovered via Gemini — verify each through its careers link."
           : live
             ? "Real openings pulled from job boards & communities — India-based or remote."
             : "Companies showing active demand for this role across India."}
@@ -581,7 +584,11 @@ function TrackDetail({
             ) : live && status === "unconfigured" ? (
               "Add your GEMINI_API_KEY in Vercel (Settings → Environment Variables), then hit Refresh to discover GCCs."
             ) : live && status === "loading" ? (
-              isGcc ? "Asking Gemini for GCCs hiring in India…" : "Fetching live signals from job boards & communities…"
+              isGemini
+                ? isStartup
+                  ? "Asking Gemini for startups hiring in India…"
+                  : "Asking Gemini for GCCs hiring in India…"
+                : "Fetching live signals from job boards & communities…"
             ) : live && status === "error" ? (
               "Couldn't reach the live sources. Try again shortly."
             ) : tab === "open" ? (
@@ -647,10 +654,9 @@ export default function App() {
   // Fetch one live track; `fresh` forces a re-scrape past the cache.
   const loadTrack = (id: string, fresh = false) => {
     setLiveState((s) => ({ ...s, [id]: "loading" }));
-    const url =
-      id === GCC_TRACK_ID
-        ? `/api/gcc${fresh ? "?fresh=1" : ""}`
-        : `/api/signals?track=${id}${fresh ? "&fresh=1" : ""}`;
+    const url = isGeminiTrack(id)
+      ? `/api/discover?type=${id}${fresh ? "&fresh=1" : ""}`
+      : `/api/signals?track=${id}${fresh ? "&fresh=1" : ""}`;
     fetch(url)
       .then((r) => r.json())
       .then((data) => {

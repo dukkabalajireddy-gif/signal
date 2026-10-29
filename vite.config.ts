@@ -30,14 +30,15 @@ function localApi(): Plugin {
         }
       });
 
-      server.middlewares.use("/api/gcc", async (req, res) => {
+      server.middlewares.use("/api/discover", async (req, res) => {
         try {
           const url = new URL(req.url ?? "", "http://localhost");
+          const type = url.searchParams.get("type") ?? "gcc";
           const fresh = url.searchParams.get("fresh") != null;
           const mod = (await importApi("gemini.mjs")) as {
-            discoverGCCs: (f?: boolean) => Promise<unknown>;
+            discover: (t: string, f?: boolean) => Promise<unknown>;
           };
-          const result = await mod.discoverGCCs(fresh);
+          const result = await mod.discover(type, fresh);
           res.setHeader("content-type", "application/json");
           res.end(JSON.stringify(result));
         } catch (e) {

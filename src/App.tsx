@@ -448,6 +448,7 @@ function TrackDetail({
   archived,
   live,
   status,
+  message,
   onBack,
   onRefresh,
   onToggleArchive,
@@ -458,6 +459,7 @@ function TrackDetail({
   archived: Listing[];
   live?: boolean;
   status?: TrackStatus;
+  message?: string;
   onBack: () => void;
   onRefresh: () => void;
   onToggleArchive: (id: string) => void;
@@ -574,17 +576,19 @@ function TrackDetail({
       <div className="mt-5 space-y-3 pb-10">
         {visible.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line px-6 py-14 text-center text-sm text-muted">
-            {live && status === "unconfigured"
-              ? "Add your GEMINI_API_KEY in Vercel (Settings → Environment Variables), then hit Refresh to discover GCCs."
-              : live && status === "loading"
-                ? isGcc
-                  ? "Asking Gemini for GCCs hiring in India…"
-                  : "Fetching live signals from job boards & communities…"
-                : live && status === "error"
-                  ? "Couldn't reach the live sources. Try again shortly."
-                  : tab === "open"
-                    ? "No open signals here yet. New ones stream in as they're detected."
-                    : "Nothing archived yet. Archive a signal to park it here."}
+            {message && tab === "open" && status !== "loading" ? (
+              <span className="mx-auto block max-w-xl break-words text-faint">{message}</span>
+            ) : live && status === "unconfigured" ? (
+              "Add your GEMINI_API_KEY in Vercel (Settings → Environment Variables), then hit Refresh to discover GCCs."
+            ) : live && status === "loading" ? (
+              isGcc ? "Asking Gemini for GCCs hiring in India…" : "Fetching live signals from job boards & communities…"
+            ) : live && status === "error" ? (
+              "Couldn't reach the live sources. Try again shortly."
+            ) : tab === "open" ? (
+              "No open signals here yet. New ones stream in as they're detected."
+            ) : (
+              "Nothing archived yet. Archive a signal to park it here."
+            )}
           </div>
         ) : (
           visible.map((l) => (
@@ -638,6 +642,7 @@ export default function App() {
     Object.fromEntries(LIVE_TRACK_IDS.map((id) => [id, "loading"])),
   );
   const [lastFetched, setLastFetched] = useState<number | null>(null);
+  const [messages, setMessages] = useState<Record<string, string>>({});
 
   // Fetch one live track; `fresh` forces a re-scrape past the cache.
   const loadTrack = (id: string, fresh = false) => {
@@ -659,6 +664,13 @@ export default function App() {
         setListings((prev) => [...prev.filter((l) => l.trackId !== id), ...fetched]);
         setLiveState((s) => ({ ...s, [id]: "ok" }));
         setLastFetched(Date.now());
+        setMessages((m) => {
+          const next = { ...m };
+          if (data.error) next[id] = `Gemini error: ${data.error}`;
+          else if (fetched.length === 0 && data.note) next[id] = `Gemini returned: ${data.note}`;
+          else delete next[id];
+          return next;
+        });
       })
       .catch(() => setLiveState((s) => ({ ...s, [id]: "error" })));
   };
@@ -751,6 +763,7 @@ export default function App() {
             archived={archived}
             live={isLiveTrack(track.id)}
             status={liveState[track.id]}
+            message={messages[track.id]}
             onBack={() => setActiveTrack(null)}
             onRefresh={() => loadTrack(track.id, true)}
             onToggleArchive={toggleArchive}

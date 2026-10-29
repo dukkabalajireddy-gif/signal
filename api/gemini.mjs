@@ -1,14 +1,14 @@
 // Gemini-powered GCC discovery.
 //
 // Uses the Gemini API (free tier via Google AI Studio) with Google Search
-// grounding to find Global Capability Centers / global companies' India
-// offices that are actively hiring, plus a careers page and any PUBLIC
-// talent-acquisition contact — each meant to be verified via the careers link.
+// grounding to find GCCs / global companies' India offices hiring AI & software
+// talent, plus a careers page and any PUBLIC talent-acquisition contact —
+// each meant to be verified via the careers link.
 //
-// Reads the key from process.env.GEMINI_API_KEY (set it in Vercel). Without a
-// key it returns { configured: false } so the UI can show a setup message.
+// Reads the key from env (set it in Vercel). Without a key it returns
+// { configured: false } so the UI can show a setup message.
 
-const MODEL = "gemini-2.5-flash";
+const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
 
 function hash(str) {
   let h = 0;
@@ -31,6 +31,46 @@ export function geminiConfigured() {
   return !!apiKey();
 }
 
+function extractArray(text) {
+  if (!text) return null;
+  const tries = [];
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) tries.push(fence[1]);
+  const bracket = text.match(/\[[\s\S]*\]/);
+  if (bracket) tries.push(bracket[0]);
+  tries.push(text);
+  for (const t of tries) {
+    try {
+      const v = JSON.parse(t.trim());
+      if (Array.isArray(v)) return v;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
+const PROMPT = `List 12 to 15 Global Capability Centers (GCCs) or global companies' India offices (captive centers) that hire AI/ML and software engineering talent in India. Prefer ones actively hiring right now.
+For each, return a JSON object:
+{"company": string, "city": string (an Indian city where they hire), "role": string (a representative AI/ML or software role), "careersUrl": string (their India careers/jobs page URL), "contact": string (a PUBLIC talent-acquisition email or recruiter page URL if known, else "")}
+Return ONLY a JSON array of these objects. No prose, no markdown fences.`;
+
+async function callModel(model, key) {
+  const body = {
+    contents: [{ parts: [{ text: PROMPT }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { temperature: 0.5 },
+  };
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+  );
+  const j = await r.json();
+  if (!r.ok) return { error: j?.error?.message || `${model}: HTTP ${r.status}`, text: "" };
+  const text = (j?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
+  return { error: "", text };
+}
+
 let cache = { at: 0, data: null };
 
 export async function discoverGCCs(fresh = false) {
@@ -38,38 +78,34 @@ export async function discoverGCCs(fresh = false) {
   if (!key) return { configured: false, listings: [] };
   if (!fresh && cache.data && Date.now() - cache.at < 60 * 60000) return cache.data;
 
-  const prompt = `List 14 Global Capability Centers (GCCs) or global companies' India offices (captive centers) that are ACTIVELY hiring software or AI engineering talent in India right now.
-Prefer ones where a direct talent-acquisition / recruiter contact can be found.
-Return ONLY a JSON array, each item:
-{"company": string, "city": string (Indian city), "role": string (an example open engineering role), "careersUrl": string (the India careers/jobs page URL), "contact": string (a PUBLIC talent-acquisition email or recruiter page URL if available, else "")}
-No prose, no markdown fences — just the JSON array.`;
-
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    tools: [{ google_search: {} }],
-    generationConfig: { temperature: 0.4 },
-  };
-
-  const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`,
-    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
-  );
-  const j = await r.json();
-  if (!r.ok) return { configured: true, error: j?.error?.message || `Gemini ${r.status}`, listings: [] };
-
-  const text = (j?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
-  const match = text.match(/\[[\s\S]*\]/);
-  let arr = [];
-  try {
-    arr = JSON.parse(match ? match[0] : text);
-  } catch {
-    arr = [];
+  let lastError = "";
+  let lastText = "";
+  let arr = null;
+  for (const model of MODELS) {
+    const res = await callModel(model, key);
+    if (res.error) {
+      lastError = res.error;
+      continue;
+    }
+    lastText = res.text;
+    arr = extractArray(res.text);
+    if (arr && arr.length) break;
   }
 
-  const listings = (Array.isArray(arr) ? arr : []).map((x, i) => ({
+  if (!arr || !arr.length) {
+    // Surface why it's empty instead of silently showing "no signals".
+    return {
+      configured: true,
+      listings: [],
+      error: lastError || undefined,
+      note: lastError ? undefined : lastText.slice(0, 280) || "Gemini returned no results.",
+    };
+  }
+
+  const listings = arr.map((x, i) => ({
     id: `gcc-${hash((x.company || "") + (x.role || "") + i)}`,
     trackId: "gcc",
-    role: x.role || "Software / AI roles",
+    role: x.role || "AI / Software roles",
     company: x.company || "GCC",
     companySize: "",
     salary: "",

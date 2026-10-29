@@ -16,14 +16,25 @@ function hash(str) {
   return Math.abs(h).toString(36);
 }
 
+// Accept a few env var names so whatever the key is stored under works.
+function apiKey() {
+  return (
+    process.env.GEMINI_API_KEY ||
+    process.env.Gemini_signal ||
+    process.env.GEMINI_SIGNAL ||
+    process.env.GEMINI_KEY ||
+    ""
+  );
+}
+
 export function geminiConfigured() {
-  return !!process.env.GEMINI_API_KEY;
+  return !!apiKey();
 }
 
 let cache = { at: 0, data: null };
 
 export async function discoverGCCs(fresh = false) {
-  const key = process.env.GEMINI_API_KEY;
+  const key = apiKey();
   if (!key) return { configured: false, listings: [] };
   if (!fresh && cache.data && Date.now() - cache.at < 60 * 60000) return cache.data;
 

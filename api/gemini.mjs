@@ -8,7 +8,7 @@
 // Reads the key from env (set it in Vercel). Without a key it returns
 // { configured: false } so the UI can show a setup message.
 
-const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+const MODELS = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash"];
 
 function hash(str) {
   let h = 0;

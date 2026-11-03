@@ -47,6 +47,28 @@ function localApi(): Plugin {
         }
       });
 
+      server.middlewares.use("/api/state", async (req, res) => {
+        try {
+          const mod = (await importApi("store.mjs")) as {
+            getState: () => Promise<unknown>;
+            applyOp: (op: string, p?: Record<string, unknown>) => Promise<unknown>;
+          };
+          res.setHeader("content-type", "application/json");
+          if (req.method === "POST") {
+            let data = "";
+            for await (const chunk of req) data += chunk;
+            const body = data ? JSON.parse(data) : {};
+            const { op, ...rest } = body;
+            res.end(JSON.stringify(await mod.applyOp(op, rest)));
+            return;
+          }
+          res.end(JSON.stringify(await mod.getState()));
+        } catch (e) {
+          res.statusCode = 200;
+          res.end(JSON.stringify({ configured: false, error: String(e) }));
+        }
+      });
+
       server.middlewares.use("/api/go", async (req, res) => {
         try {
           const url = new URL(req.url ?? "", "http://localhost");

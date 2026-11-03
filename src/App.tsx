@@ -177,11 +177,13 @@ function Sidebar({
   setNav,
   totalNew,
   pipelineCount,
+  shared,
 }: {
   nav: Nav;
   setNav: (n: Nav) => void;
   totalNew: number;
   pipelineCount: number;
+  shared: boolean;
 }) {
   return (
     <aside className="hidden w-[240px] shrink-0 flex-col border-r border-line bg-panel px-4 py-5 md:flex">
@@ -204,9 +206,15 @@ function Sidebar({
         </p>
       </div>
 
-      <div className="mt-auto flex items-center gap-1.5 border-t border-line px-1 pt-3 text-[11px] text-faint">
-        <span>for</span>
-        <span className="font-medium text-muted">BabbleBots.ai</span>
+      <div className="mt-auto border-t border-line px-1 pt-3">
+        <div className="flex items-center gap-1.5 text-[11px]" title={shared ? "Pipeline & archive are shared with your team" : "Pipeline & archive are saved in this browser only"}>
+          <span className={`h-1.5 w-1.5 rounded-full ${shared ? "bg-lime" : "bg-faint"}`} />
+          <span className="text-faint">{shared ? "Team · shared" : "This browser only"}</span>
+        </div>
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-faint">
+          <span>for</span>
+          <span className="font-medium text-muted">BabbleBots.ai</span>
+        </div>
       </div>
     </aside>
   );
@@ -938,6 +946,10 @@ export default function App() {
   const isHidden = (id: string) =>
     deletedRef.current.has(id) || archivedRef.current.some((a) => a.id === id);
 
+  // Shared team store (when connected); otherwise everything stays per-browser.
+  const sharedRef = useRef(false);
+  const [shared, setShared] = useState(false);
+
   // Pipeline (sales funnel), persisted per browser.
   const pipelineRef = useRef<PipelineItem[]>(loadJSON<PipelineItem[]>(PIPE_KEY, []));
   const [pipeline, setPipelineState] = useState<PipelineItem[]>(pipelineRef.current);
@@ -949,10 +961,16 @@ export default function App() {
   const addToPipeline = (l: Listing) => {
     if (pipelineRef.current.some((p) => p.id === l.id)) return;
     setPipeline((prev) => [{ ...l, stage: "spotted" }, ...prev]);
+    op("pipeline.add", { item: l });
   };
-  const moveStage = (id: string, stage: Stage) =>
+  const moveStage = (id: string, stage: Stage) => {
     setPipeline((prev) => prev.map((p) => (p.id === id ? { ...p, stage } : p)));
-  const removeFromPipeline = (id: string) => setPipeline((prev) => prev.filter((p) => p.id !== id));
+    op("pipeline.move", { id, stage });
+  };
+  const removeFromPipeline = (id: string) => {
+    setPipeline((prev) => prev.filter((p) => p.id !== id));
+    op("pipeline.remove", { id });
+  };
 
   const [listings, setListings] = useState<Listing[]>(() =>
     SEED_LISTINGS.filter((l) => !isLiveTrack(l.trackId)).filter((l) => !isHidden(l.id)),
@@ -1038,12 +1056,14 @@ export default function App() {
     if (inOpen) {
       setListings((prev) => prev.filter((l) => l.id !== id));
       setArchived((prev) => [{ ...inOpen, status: "archived" }, ...prev]);
+      op("archive", { item: inOpen });
       return;
     }
     const inArchive = archivedRef.current.find((l) => l.id === id);
     if (inArchive) {
       setArchived((prev) => prev.filter((l) => l.id !== id));
       setListings((prev) => [{ ...inArchive, status: "open" }, ...prev]);
+      op("unarchive", { id });
     }
   };
   const deleteListing = (id: string) => {
@@ -1051,7 +1071,41 @@ export default function App() {
     saveJSON(DEL_KEY, [...deletedRef.current]);
     setListings((prev) => prev.filter((l) => l.id !== id));
     setArchived((prev) => prev.filter((l) => l.id !== id));
+    op("delete", { id });
   };
+
+  // Shared-store sync: hydrate from the team store on load, push each change.
+  const applyServerState = (data: { pipeline?: PipelineItem[]; archived?: Listing[]; deleted?: string[] }) => {
+    if (Array.isArray(data.pipeline)) setPipeline(() => data.pipeline as PipelineItem[]);
+    if (Array.isArray(data.archived)) setArchived(() => data.archived as Listing[]);
+    if (Array.isArray(data.deleted)) deletedRef.current = new Set(data.deleted);
+    setListings((prev) => prev.filter((l) => !isHidden(l.id)));
+  };
+  const op = (name: string, payload: Record<string, unknown>) => {
+    if (!sharedRef.current) return;
+    fetch("/api/state", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ op: name, ...payload }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.configured) applyServerState(data);
+      })
+      .catch(() => {});
+  };
+  useEffect(() => {
+    fetch("/api/state")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data || data.configured === false) return; // stay per-browser
+        sharedRef.current = true;
+        setShared(true);
+        applyServerState(data);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const totalNew = useMemo(
     () => listings.filter((l) => l.status === "open" && !l.viewed).length,
@@ -1071,6 +1125,7 @@ export default function App() {
         }}
         totalNew={totalNew}
         pipelineCount={pipeline.length}
+        shared={shared}
       />
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">

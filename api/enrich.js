@@ -1,6 +1,6 @@
 // Vercel serverless function: GET /api/enrich?company=&domain=&fresh=
 // Returns the best HR / recruiting contact for a company via Hunter.io.
-import { enrichCompany } from "./enrich.mjs";
+import { enrichCompany } from "./hunter.mjs";
 
 export default async function handler(req, res) {
   try {

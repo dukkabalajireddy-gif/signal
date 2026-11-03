@@ -75,7 +75,7 @@ function localApi(): Plugin {
           const company = url.searchParams.get("company") ?? "";
           const domain = url.searchParams.get("domain") ?? "";
           const fresh = url.searchParams.get("fresh") != null;
-          const mod = (await importApi("enrich.mjs")) as {
+          const mod = (await importApi("hunter.mjs")) as {
             enrichCompany: (c: string, d?: string, f?: boolean) => Promise<unknown>;
           };
           res.setHeader("content-type", "application/json");

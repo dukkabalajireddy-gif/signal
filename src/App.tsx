@@ -17,7 +17,7 @@ import {
   type Track,
 } from "./data";
 
-type TrackStatus = "loading" | "ok" | "error" | "unconfigured";
+type TrackStatus = "loading" | "ok" | "error" | "unconfigured" | "idle";
 type LiveState = Record<string, TrackStatus>;
 
 // Per-browser persistence for archive/delete decisions, so a reload keeps them.
@@ -665,6 +665,13 @@ function TrackDetail({
         ))}
       </div>
 
+      {/* non-blocking notice (e.g. quota reached) shown alongside results */}
+      {message && tab === "open" && visible.length > 0 && (
+        <div className="mt-4 rounded-xl border border-[#f5c451]/30 bg-[#f5c451]/10 px-4 py-2.5 text-xs text-[#f5c451]">
+          {message}
+        </div>
+      )}
+
       {/* list */}
       <div className="mt-5 space-y-3 pb-10">
         {visible.length === 0 ? (
@@ -1036,7 +1043,9 @@ export default function App() {
     SEED_LISTINGS.filter((l) => !isLiveTrack(l.trackId)).filter((l) => !isHidden(l.id)),
   );
   const [liveState, setLiveState] = useState<LiveState>(() =>
-    Object.fromEntries(LIVE_TRACK_IDS.map((id) => [id, "loading"])),
+    // Gemini tracks start idle and load only when opened — a grounded Gemini
+    // call per page load would burn the free-tier quota fast.
+    Object.fromEntries(LIVE_TRACK_IDS.map((id) => [id, isGeminiTrack(id) ? "idle" : "loading"])),
   );
   const [lastFetched, setLastFetched] = useState<number | null>(null);
   const [messages, setMessages] = useState<Record<string, string>>({});
@@ -1069,19 +1078,30 @@ export default function App() {
         setLastFetched(Date.now());
         setMessages((m) => {
           const next = { ...m };
-          if (data.error) next[id] = `Gemini error: ${data.error}`;
-          else if (fetched.length === 0 && data.note) next[id] = `Gemini returned: ${data.note}`;
-          else delete next[id];
+          if (data.error && /quota|rate.?limit|429|exceeded/i.test(data.error)) {
+            next[id] =
+              "Gemini free-tier quota reached. New discovery pauses briefly — try again in a minute (per-minute limit) or later today (daily limit). Showing the last results if any.";
+          } else if (data.error) {
+            next[id] = `Gemini error: ${data.error}`;
+          } else if (fetched.length === 0 && data.note) {
+            next[id] = `Gemini returned: ${data.note}`;
+          } else {
+            delete next[id];
+          }
           return next;
         });
       })
       .catch(() => setLiveState((s) => ({ ...s, [id]: "error" })));
   };
-  const refreshAll = () => LIVE_TRACK_IDS.forEach((id) => loadTrack(id, true));
+  // Grid "Refresh" re-scrapes the keyless tracks. Gemini tracks refresh on
+  // their own page (their Refresh button) so a grid refresh can't drain quota.
+  const refreshAll = () =>
+    LIVE_TRACK_IDS.filter((id) => !isGeminiTrack(id)).forEach((id) => loadTrack(id, true));
 
-  // Initial load of all live tracks.
+  // Initial load of the keyless live tracks only. Gemini tracks (gcc/startup)
+  // load lazily on open to conserve the free-tier quota.
   useEffect(() => {
-    LIVE_TRACK_IDS.forEach((id) => loadTrack(id));
+    LIVE_TRACK_IDS.filter((id) => !isGeminiTrack(id)).forEach((id) => loadTrack(id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1106,6 +1126,10 @@ export default function App() {
 
   const openTrack = (id: string) => {
     setActiveTrack(id);
+    // Lazy-load Gemini tracks the first time they're opened (quota-friendly).
+    if (isGeminiTrack(id) && (liveState[id] === "idle" || liveState[id] === "error")) {
+      loadTrack(id);
+    }
     // Mark this track's open listings as viewed.
     setListings((prev) =>
       prev.map((l) => (l.trackId === id && l.status === "open" ? { ...l, viewed: true } : l)),

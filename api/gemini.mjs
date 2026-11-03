@@ -110,11 +110,13 @@ export async function discover(type, fresh = false) {
   }
 
   if (!arr || !arr.length) {
-    return {
-      configured: true,
-      listings: [],
-      error: errors.join(" | ").slice(0, 300) || "Gemini returned no results.",
-    };
+    const why = errors.join(" | ").slice(0, 300) || "Gemini returned no results.";
+    // If we have previously discovered results (e.g. quota hit this time),
+    // keep serving them with the error attached rather than going blank.
+    if (cache[type]?.data?.listings?.length) {
+      return { ...cache[type].data, error: why };
+    }
+    return { configured: true, listings: [], error: why };
   }
 
   const listings = arr.map((x, i) => ({

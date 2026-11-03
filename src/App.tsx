@@ -42,6 +42,8 @@ function saveJSON(key: string, val: unknown) {
 
 type Nav = "signals" | "pipeline" | "insights";
 type StatusTab = "open" | "archived";
+// Per-listing contact-lookup state (Hunter). Absent = not yet tried.
+type EnrichState = "loading" | "error" | "none" | "unconfigured";
 
 function relTime(ageSec: number): string {
   if (ageSec < 60) return `${Math.max(1, Math.floor(ageSec))}s ago`;
@@ -397,12 +399,16 @@ function ListingRow({
   onAddToPipeline,
   onToggleArchive,
   onDelete,
+  onEnrich,
+  enrich,
 }: {
   l: Listing;
   inPipeline?: boolean;
   onAddToPipeline?: (l: Listing) => void;
   onToggleArchive: (id: string) => void;
   onDelete: (id: string) => void;
+  onEnrich?: (l: Listing) => void;
+  enrich?: EnrichState;
 }) {
   return (
     <article className="flex flex-col gap-3 rounded-2xl border border-line bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -443,12 +449,31 @@ function ListingRow({
           <span>· {relTime(l.postedSec)}</span>
         </div>
 
-        {l.contact && (
+        {l.contact ? (
           <div className="mt-1.5 text-xs">
             <span className="text-faint">Contact: </span>
             <span className="select-all font-medium text-lime">{l.contact}</span>
           </div>
-        )}
+        ) : onEnrich ? (
+          <div className="mt-1.5 text-xs">
+            {enrich === "loading" ? (
+              <span className="text-faint">Finding contact…</span>
+            ) : enrich === "unconfigured" ? (
+              <span className="text-faint">Set HUNTER_API_KEY in Vercel to find contacts</span>
+            ) : (
+              <button
+                onClick={() => onEnrich(l)}
+                className="text-faint underline-offset-2 transition-colors hover:text-lime hover:underline"
+              >
+                {enrich === "none"
+                  ? "No contact found · retry"
+                  : enrich === "error"
+                    ? "Lookup failed · retry"
+                    : "＋ Find contact"}
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2 sm:flex-col sm:items-end">
@@ -510,6 +535,8 @@ function TrackDetail({
   onRefresh,
   onToggleArchive,
   onDelete,
+  onEnrich,
+  enrich,
 }: {
   track: Track;
   open: Listing[];
@@ -524,6 +551,8 @@ function TrackDetail({
   onRefresh: () => void;
   onToggleArchive: (id: string) => void;
   onDelete: (id: string) => void;
+  onEnrich: (l: Listing) => void;
+  enrich: Record<string, EnrichState>;
 }) {
   const isGemini = isGeminiTrack(track.id);
   const isStartup = track.id === "startup";
@@ -667,6 +696,8 @@ function TrackDetail({
                 onAddToPipeline={onAddToPipeline}
                 onToggleArchive={onToggleArchive}
                 onDelete={onDelete}
+                onEnrich={onEnrich}
+                enrich={enrich[l.id]}
               />
             </div>
           ))
@@ -683,6 +714,8 @@ function PipelineCard({
   onPrev,
   onNext,
   onRemove,
+  onEnrich,
+  enrich,
 }: {
   item: PipelineItem;
   canPrev: boolean;
@@ -690,6 +723,8 @@ function PipelineCard({
   onPrev: () => void;
   onNext: () => void;
   onRemove: () => void;
+  onEnrich: (l: Listing) => void;
+  enrich?: EnrichState;
 }) {
   return (
     <div className="rounded-xl border border-line bg-card p-3">
@@ -717,10 +752,29 @@ function PipelineCard({
           Open ↗
         </a>
       </div>
-      {item.contact && (
+      {item.contact ? (
         <div className="mt-1.5 truncate text-[11px]">
           <span className="text-faint">Contact: </span>
           <span className="select-all text-lime">{item.contact}</span>
+        </div>
+      ) : (
+        <div className="mt-1.5 text-[11px]">
+          {enrich === "loading" ? (
+            <span className="text-faint">Finding contact…</span>
+          ) : enrich === "unconfigured" ? (
+            <span className="text-faint">Set HUNTER_API_KEY to find contacts</span>
+          ) : (
+            <button
+              onClick={() => onEnrich(item)}
+              className="text-faint underline-offset-2 transition-colors hover:text-lime hover:underline"
+            >
+              {enrich === "none"
+                ? "No contact found · retry"
+                : enrich === "error"
+                  ? "Lookup failed · retry"
+                  : "＋ Find contact"}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -732,11 +786,15 @@ function PipelineBoard({
   onMove,
   onRemove,
   onGoTracks,
+  onEnrich,
+  enrich,
 }: {
   pipeline: PipelineItem[];
   onMove: (id: string, stage: Stage) => void;
   onRemove: (id: string) => void;
   onGoTracks: () => void;
+  onEnrich: (l: Listing) => void;
+  enrich: Record<string, EnrichState>;
 }) {
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-8 lg:px-10">
@@ -782,6 +840,8 @@ function PipelineBoard({
                         onPrev={() => onMove(p.id, STAGES[si - 1].id)}
                         onNext={() => onMove(p.id, STAGES[si + 1].id)}
                         onRemove={() => onRemove(p.id)}
+                        onEnrich={onEnrich}
+                        enrich={enrich[p.id]}
                       />
                     ))
                   )}
@@ -1074,6 +1134,35 @@ export default function App() {
     op("delete", { id });
   };
 
+  // Recruiter-contact enrichment (Hunter). Fills the Contact line on demand.
+  const [enrichState, setEnrichState] = useState<Record<string, EnrichState>>({});
+  const setContact = (id: string, contact: string) => {
+    setListings((prev) => prev.map((l) => (l.id === id ? { ...l, contact } : l)));
+    setArchived((prev) => prev.map((l) => (l.id === id ? { ...l, contact } : l)));
+    setPipeline((prev) => prev.map((p) => (p.id === id ? { ...p, contact } : p)));
+  };
+  const enrichContact = (l: Listing) => {
+    if (!l.company || enrichState[l.id] === "loading") return;
+    setEnrichState((s) => ({ ...s, [l.id]: "loading" }));
+    fetch(`/api/enrich?company=${encodeURIComponent(l.company)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.configured === false) {
+          setEnrichState((s) => ({ ...s, [l.id]: "unconfigured" }));
+        } else if (data && data.contact) {
+          setContact(l.id, data.contact);
+          setEnrichState((s) => {
+            const n = { ...s };
+            delete n[l.id];
+            return n;
+          });
+        } else {
+          setEnrichState((s) => ({ ...s, [l.id]: data && data.error ? "error" : "none" }));
+        }
+      })
+      .catch(() => setEnrichState((s) => ({ ...s, [l.id]: "error" })));
+  };
+
   // Shared-store sync: hydrate from the team store on load, push each change.
   const applyServerState = (data: { pipeline?: PipelineItem[]; archived?: Listing[]; deleted?: string[] }) => {
     if (Array.isArray(data.pipeline)) setPipeline(() => data.pipeline as PipelineItem[]);
@@ -1135,6 +1224,8 @@ export default function App() {
             onMove={moveStage}
             onRemove={removeFromPipeline}
             onGoTracks={() => setNav("signals")}
+            onEnrich={enrichContact}
+            enrich={enrichState}
           />
         ) : nav === "insights" ? (
           <InsightsView listings={listings} pipeline={pipeline} archived={archived} />
@@ -1153,6 +1244,8 @@ export default function App() {
             onRefresh={() => loadTrack(track.id, true)}
             onToggleArchive={toggleArchive}
             onDelete={deleteListing}
+            onEnrich={enrichContact}
+            enrich={enrichState}
           />
         ) : (
           <TracksGrid

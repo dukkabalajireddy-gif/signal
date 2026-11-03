@@ -69,6 +69,23 @@ function localApi(): Plugin {
         }
       });
 
+      server.middlewares.use("/api/enrich", async (req, res) => {
+        try {
+          const url = new URL(req.url ?? "", "http://localhost");
+          const company = url.searchParams.get("company") ?? "";
+          const domain = url.searchParams.get("domain") ?? "";
+          const fresh = url.searchParams.get("fresh") != null;
+          const mod = (await importApi("enrich.mjs")) as {
+            enrichCompany: (c: string, d?: string, f?: boolean) => Promise<unknown>;
+          };
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify(await mod.enrichCompany(company, domain, fresh)));
+        } catch (e) {
+          res.statusCode = 200;
+          res.end(JSON.stringify({ configured: true, error: String(e) }));
+        }
+      });
+
       server.middlewares.use("/api/go", async (req, res) => {
         try {
           const url = new URL(req.url ?? "", "http://localhost");

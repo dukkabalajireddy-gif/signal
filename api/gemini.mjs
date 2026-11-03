@@ -92,7 +92,10 @@ export async function discover(type, fresh = false) {
 
   const errors = [];
   let arr = null;
-  outer: for (const useSearch of [true, false]) {
+  // Try plain JSON generation first (generous free quota), then grounded
+  // Google Search as a fallback (its free quota is much smaller and is what
+  // tends to 429 on the free tier).
+  outer: for (const useSearch of [false, true]) {
     for (const model of MODELS) {
       const res = await callModel(model, key, prompt, useSearch);
       const tag = `${model}${useSearch ? "+search" : ""}`;

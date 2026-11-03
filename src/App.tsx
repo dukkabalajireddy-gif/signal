@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   isGeminiTrack,
   isLiveTrack,
@@ -668,23 +668,6 @@ function TrackDetail({
   );
 }
 
-function EmptyView({ title, note }: { title: string; note: string }) {
-  return (
-    <div className="grid flex-1 place-items-center px-6 py-20 text-center">
-      <div className="max-w-sm">
-        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-panel-2 text-2xl text-lime">
-          ✦
-        </div>
-        <h2 className="mt-5 text-xl font-semibold">{title}</h2>
-        <p className="mt-2 text-sm text-muted">{note}</p>
-        <span className="mt-4 inline-block rounded-full border border-line bg-card px-3 py-1 text-xs text-faint">
-          Coming next
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function PipelineCard({
   item,
   canPrev,
@@ -799,6 +782,141 @@ function PipelineBoard({
             );
           })}
         </div>
+      )}
+    </div>
+  );
+}
+
+const TRACK_NAME: Record<string, string> = Object.fromEntries(TRACKS.map((t) => [t.id, t.name]));
+
+function tally<T>(arr: T[], keyFn: (x: T) => string): [string, number][] {
+  const m = new Map<string, number>();
+  for (const x of arr) {
+    const k = keyFn(x);
+    if (!k) continue;
+    m.set(k, (m.get(k) || 0) + 1);
+  }
+  return [...m.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+function InsightBar({ label, value, max, color }: { label: string; value: number; max: number; color?: string }) {
+  const pct = max ? Math.max(3, Math.round((value / max) * 100)) : 0;
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      <span className="w-36 shrink-0 truncate text-muted">{label}</span>
+      <div className="h-2 min-w-0 flex-1 rounded-full bg-line/60">
+        <div className="h-2 rounded-full" style={{ width: `${pct}%`, background: color || "var(--color-lime)" }} />
+      </div>
+      <span className="w-8 shrink-0 text-right font-mono text-xs text-text">{value}</span>
+    </div>
+  );
+}
+
+function InsightPanel({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-line bg-card p-5">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      <div className="mt-4 space-y-2.5">{children}</div>
+    </div>
+  );
+}
+
+function InsightStat({ n, label, hot }: { n: number; label: string; hot?: boolean }) {
+  return (
+    <div className="min-w-[120px] flex-1 rounded-2xl border border-line bg-panel px-5 py-4">
+      <div className={`font-mono text-2xl font-semibold leading-none ${hot ? "text-lime" : ""}`}>{n}</div>
+      <div className="mt-1.5 text-xs text-muted">{label}</div>
+    </div>
+  );
+}
+
+function InsightsView({
+  listings,
+  pipeline,
+  archived,
+}: {
+  listings: Listing[];
+  pipeline: PipelineItem[];
+  archived: Listing[];
+}) {
+  const india = listings.filter((l) => (l.location || "").startsWith("India")).length;
+  const remote = listings.filter((l) => l.location === "Remote").length;
+  const hot = listings.filter((l) => l.lead === "hot").length;
+
+  const byTrack = tally(listings, (l) => TRACK_NAME[l.trackId] || l.trackId).slice(0, 8);
+  const bySource = tally(listings, (l) => l.sourceLabel).slice(0, 8);
+  const byCompany = tally(listings, (l) => l.company).slice(0, 8);
+  const temps: [string, number, string][] = [
+    ["Hot", listings.filter((l) => l.lead === "hot").length, "var(--color-lime)"],
+    ["Warm", listings.filter((l) => l.lead === "warm").length, "#f5c451"],
+    ["Cold", listings.filter((l) => l.lead === "cold").length, "#8fa6c6"],
+  ];
+  const funnel = STAGES.map((s) => [s.label, pipeline.filter((p) => p.stage === s.id).length] as [string, number]);
+
+  const maxOf = (rows: [string, number][]) => Math.max(1, ...rows.map((r) => r[1]));
+
+  return (
+    <div className="mx-auto w-full max-w-5xl px-6 py-8 lg:px-10">
+      <div className="text-[11px] font-semibold uppercase tracking-widest text-lime">
+        <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-lime align-middle" />
+        Analytics
+      </div>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight">Insights</h1>
+      <p className="mt-1.5 text-sm text-muted">A live read on your current signal pool and pipeline.</p>
+
+      {listings.length === 0 ? (
+        <div className="mt-7 rounded-2xl border border-dashed border-line px-6 py-16 text-center text-sm text-muted">
+          Insights appear once signals load — open Client Signals to fetch them.
+        </div>
+      ) : (
+        <>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <InsightStat n={listings.length} label="Open signals" />
+            <InsightStat n={india} label="India-based" hot />
+            <InsightStat n={remote} label="Remote" />
+            <InsightStat n={hot} label="Hot leads" hot />
+            <InsightStat n={pipeline.length} label="In pipeline" />
+            <InsightStat n={archived.length} label="Archived" />
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <InsightPanel title="Signals by track">
+              {byTrack.map(([label, v]) => (
+                <InsightBar key={label} label={label} value={v} max={maxOf(byTrack)} />
+              ))}
+            </InsightPanel>
+
+            <InsightPanel title="Signals by source">
+              {bySource.map(([label, v]) => (
+                <InsightBar key={label} label={label} value={v} max={maxOf(bySource)} />
+              ))}
+            </InsightPanel>
+
+            <InsightPanel title="Lead temperature">
+              {temps.map(([label, v, c]) => (
+                <InsightBar key={label} label={label} value={v} max={Math.max(1, ...temps.map((t) => t[1]))} color={c} />
+              ))}
+            </InsightPanel>
+
+            <InsightPanel title="Pipeline funnel">
+              {pipeline.length === 0 ? (
+                <p className="text-xs text-faint">No leads in the pipeline yet.</p>
+              ) : (
+                funnel.map(([label, v]) => (
+                  <InsightBar key={label} label={label} value={v} max={maxOf(funnel)} />
+                ))
+              )}
+            </InsightPanel>
+
+            <div className="lg:col-span-2">
+              <InsightPanel title="Top hiring companies">
+                {byCompany.map(([label, v]) => (
+                  <InsightBar key={label} label={label} value={v} max={maxOf(byCompany)} />
+                ))}
+              </InsightPanel>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -964,10 +1082,7 @@ export default function App() {
             onGoTracks={() => setNav("signals")}
           />
         ) : nav === "insights" ? (
-          <EmptyView
-            title="Insights"
-            note="Trends, winning tracks and source breakdowns over time. We'll wire this next."
-          />
+          <InsightsView listings={listings} pipeline={pipeline} archived={archived} />
         ) : track ? (
           <TrackDetail
             track={track}

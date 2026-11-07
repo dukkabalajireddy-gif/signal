@@ -1,6 +1,6 @@
 // Vercel serverless function: GET /api/state (shared team state),
 // POST /api/state with { op, ... } to apply one change. No caching.
-import { getState, applyOp } from "./store.mjs";
+import { getState, applyOp } from "./_lib/store.mjs";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");

@@ -1,6 +1,6 @@
 // Vercel serverless function: GET /api/signals?track=ai-engineer
 // Returns live listings for a track as JSON. CDN-cached for 10 min.
-import { getListings } from "./sources.mjs";
+import { getListings } from "./_lib/sources.mjs";
 
 export default async function handler(req, res) {
   const track = (req.query?.track || "").toString();

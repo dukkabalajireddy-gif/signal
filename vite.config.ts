@@ -18,7 +18,7 @@ function localApi(): Plugin {
           const url = new URL(req.url ?? "", "http://localhost");
           const track = url.searchParams.get("track") ?? "";
           const fresh = url.searchParams.get("fresh") != null;
-          const mod = (await importApi("sources.mjs")) as {
+          const mod = (await importApi("_lib/sources.mjs")) as {
             getListings: (t: string, o?: { fresh?: boolean }) => Promise<unknown[]>;
           };
           const listings = await mod.getListings(track, { fresh });
@@ -35,7 +35,7 @@ function localApi(): Plugin {
           const url = new URL(req.url ?? "", "http://localhost");
           const type = url.searchParams.get("type") ?? "gcc";
           const fresh = url.searchParams.get("fresh") != null;
-          const mod = (await importApi("discovery.mjs")) as {
+          const mod = (await importApi("_lib/discovery.mjs")) as {
             discoverAny: (t: string, f?: boolean) => Promise<unknown>;
           };
           const result = await mod.discoverAny(type, fresh);
@@ -49,7 +49,7 @@ function localApi(): Plugin {
 
       server.middlewares.use("/api/state", async (req, res) => {
         try {
-          const mod = (await importApi("store.mjs")) as {
+          const mod = (await importApi("_lib/store.mjs")) as {
             getState: () => Promise<unknown>;
             applyOp: (op: string, p?: Record<string, unknown>) => Promise<unknown>;
           };
@@ -75,7 +75,7 @@ function localApi(): Plugin {
           const company = url.searchParams.get("company") ?? "";
           const domain = url.searchParams.get("domain") ?? "";
           const fresh = url.searchParams.get("fresh") != null;
-          const mod = (await importApi("hunter.mjs")) as {
+          const mod = (await importApi("_lib/hunter.mjs")) as {
             enrichCompany: (c: string, d?: string, f?: boolean) => Promise<unknown>;
           };
           res.setHeader("content-type", "application/json");
@@ -91,7 +91,7 @@ function localApi(): Plugin {
           const url = new URL(req.url ?? "", "http://localhost");
           const u = url.searchParams.get("u") || "";
           const c = url.searchParams.get("c") || "";
-          const mod = (await importApi("apply.mjs")) as {
+          const mod = (await importApi("_lib/apply.mjs")) as {
             resolveApply: (u: string, c?: string) => Promise<string>;
             allowedHost: (u: string) => boolean;
           };

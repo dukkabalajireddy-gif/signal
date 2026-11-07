@@ -1,7 +1,7 @@
 // Vercel serverless function: GET /api/go?u=<postUrl>&c=<company>
 // Resolves an aggregator post to the company's real apply link and redirects.
 // Falls back to the original post if nothing better is found.
-import { resolveApply, allowedHost } from "./apply.mjs";
+import { resolveApply, allowedHost } from "./_lib/apply.mjs";
 
 export default async function handler(req, res) {
   const u = (req.query?.u || "").toString();

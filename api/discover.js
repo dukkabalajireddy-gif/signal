@@ -1,6 +1,6 @@
 // Vercel serverless function: GET /api/discover?type=gcc|startup
 // LLM-powered discovery (Groq preferred, Gemini fallback). Cached 1h.
-import { discoverAny } from "./discovery.mjs";
+import { discoverAny } from "./_lib/discovery.mjs";
 
 export default async function handler(req, res) {
   const type = (req.query?.type || "gcc").toString();

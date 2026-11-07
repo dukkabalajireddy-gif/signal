@@ -64,7 +64,9 @@ export async function fromYC() {
       url: h.slug ? `https://www.ycombinator.com/companies/${h.slug}/jobs` : h.website || "#",
       source: "yc",
       sourceLabel: `Y Combinator${h.batch ? ` · ${h.batch}` : ""}`,
-      posted: h.launched_at ? new Date(h.launched_at * 1000).toISOString() : new Date().toISOString(),
+      // isHiring is a CURRENT signal — stamp fresh so they aren't sorted out by
+      // the per-track recency cut (launch date would bury them).
+      posted: new Date().toISOString(),
       companySize: h.team_size ? String(h.team_size) : "",
       // ensure these match the broad India-tech track so they surface as leads
       matchText: `${h.name} ${h.one_liner || ""} software engineering hiring tech roles`,

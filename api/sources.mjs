@@ -235,7 +235,7 @@ function leadOf(region, postedMs) {
 const SOURCE_LABEL = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", remoteok: "RemoteOK", hackernews: "Hacker News", frontline: "Frontline Media", jobalertshub: "Job Alerts Hub", serp: "Google Jobs", yc: "Y Combinator" };
 
 // Returns listings for one live track, India-first, capped per company.
-export async function getListings(trackId, { limit = 60, perCompany = 5, fresh = false } = {}) {
+export async function getListings(trackId, { limit = 90, perCompany = 5, fresh = false } = {}) {
   const track = LIVE_TRACKS[trackId];
   if (!track) return [];
   const raw = await allRaw(fresh);

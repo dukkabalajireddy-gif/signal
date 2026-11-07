@@ -291,7 +291,7 @@ function TrackCard({
             : error
               ? "Couldn't load live data"
               : setup
-                ? "Add Gemini key to enable"
+                ? "Add Groq key to enable"
                 : openCount > 0
                   ? `Updated ${relTime(lastSec)}`
                   : "No signals yet"}
@@ -574,7 +574,6 @@ function TrackDetail({
   enrich: Record<string, EnrichState>;
 }) {
   const isGemini = isGeminiTrack(track.id);
-  const isStartup = track.id === "startup";
   const [tab, setTab] = useState<StatusTab>("open");
   const [query, setQuery] = useState("");
 
@@ -655,9 +654,7 @@ function TrackDetail({
       </div>
       <p className="mt-1 text-sm text-muted">
         {isGemini
-          ? isStartup
-            ? "Indian startups (~30–200 people, ₹8 LPA+) hiring core tech roles — your ICP, not big MNCs. Discovered via Gemini; verify via the careers link."
-            : "Global capability centers hiring in India, discovered via Gemini — verify each through its careers link."
+          ? "Indian startups (~30–200 people, ₹8 LPA+) hiring core tech roles — your ICP, not big MNCs. Discovered via Groq; verify via the careers link."
           : live
             ? "Real openings pulled from job boards & communities — India-based or remote."
             : "Companies showing active demand for this role across India."}
@@ -698,12 +695,10 @@ function TrackDetail({
             {message && tab === "open" && status !== "loading" ? (
               <span className="mx-auto block max-w-xl break-words text-faint">{message}</span>
             ) : live && status === "unconfigured" ? (
-              "Add your GEMINI_API_KEY in Vercel (Settings → Environment Variables), then hit Refresh to discover GCCs."
+              "Add your GROQ_API_KEY in Vercel (Settings → Environment Variables), then hit Refresh to discover startups."
             ) : live && status === "loading" ? (
               isGemini
-                ? isStartup
-                  ? "Asking Gemini for startups hiring in India…"
-                  : "Asking Gemini for GCCs hiring in India…"
+                ? "Asking Groq for startups hiring in India…"
                 : "Fetching live signals from job boards & communities…"
             ) : live && status === "error" ? (
               "Couldn't reach the live sources. Try again shortly."
@@ -1359,9 +1354,9 @@ export default function App() {
           const next = { ...m };
           if (data.error && /quota|rate.?limit|429|exceeded/i.test(data.error)) {
             next[id] =
-              "Gemini free-tier quota reached. New discovery pauses briefly — try again in a minute (per-minute limit) or later today (daily limit). Showing the last results if any.";
+              "Discovery is rate-limited right now — try again in a minute. Showing the last results if any.";
           } else if (data.error) {
-            next[id] = `Gemini error: ${data.error}`;
+            next[id] = `Discovery error: ${data.error}`;
           } else if (fetched.length === 0 && data.note) {
             next[id] = `Gemini returned: ${data.note}`;
           } else {

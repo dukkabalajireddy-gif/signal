@@ -3,7 +3,7 @@
 import { discoverAny } from "./_lib/discovery.mjs";
 
 export default async function handler(req, res) {
-  const type = (req.query?.type || "gcc").toString();
+  const type = (req.query?.type || "startup").toString();
   const fresh = req.query?.fresh != null;
   try {
     const result = await discoverAny(type, fresh);

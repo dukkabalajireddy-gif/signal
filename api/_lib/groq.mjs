@@ -76,7 +76,7 @@ async function callGroq(model, key, prompt) {
 export async function discoverGroq(type, fresh = false) {
   const key = apiKey();
   if (!key) return { configured: false, listings: [] };
-  const prompt = (PROMPTS[type] || PROMPTS.gcc) + "\nReturn ONLY the JSON array, no prose.";
+  const prompt = (PROMPTS[type] || PROMPTS.startup) + "\nReturn ONLY the JSON array, no prose.";
   if (!fresh && cache[type] && Date.now() - cache[type].at < 60 * 60000) return cache[type].data;
 
   const MODELS = await pickModels(key);

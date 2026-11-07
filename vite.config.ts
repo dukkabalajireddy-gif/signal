@@ -33,7 +33,7 @@ function localApi(): Plugin {
       server.middlewares.use("/api/discover", async (req, res) => {
         try {
           const url = new URL(req.url ?? "", "http://localhost");
-          const type = url.searchParams.get("type") ?? "gcc";
+          const type = url.searchParams.get("type") ?? "startup";
           const fresh = url.searchParams.get("fresh") != null;
           const mod = (await importApi("_lib/discovery.mjs")) as {
             discoverAny: (t: string, f?: boolean) => Promise<unknown>;

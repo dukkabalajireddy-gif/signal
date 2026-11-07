@@ -1,59 +1,36 @@
 // Y Combinator startup directory as a source for Signal.
 //
-// YC's public company directory (ycombinator.com/companies) is powered by a
-// public Algolia index with an `isHiring` flag, team size and location — ideal
-// for finding small Indian YC startups that are hiring (prime ICP: founder-led,
-// fast to convert, tier-1 friendly). The public search key is embedded in the
-// directory page's `window.AlgoliaOpts`; we read it at runtime so key rotations
-// self-heal. No account or env key needed.
+// Uses the community-maintained yc-oss open API (static JSON on GitHub Pages,
+// refreshed daily) — specifically companies/hiring.json, the ~1500 YC companies
+// currently hiring. No key, no scraping, nothing to rotate. We keep India-based
+// startups with <=200 people (prime ICP: founder-led, fast to convert) and feed
+// them into the Companies view.
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; SignalBot/0.1)" };
-const INDEX = "YCCompany_production";
+const SRC = "https://yc-oss.github.io/api/companies/hiring.json";
 const MAX_TEAM = 200; // ICP: small startups, not unicorns
+const INDIA = /\b(india|bengaluru|bangalore|mumbai|delhi|gurgaon|gurugram|hyderabad|pune|chennai|noida|kolkata|ahmedabad|kochi|coimbatore|jaipur|indore|chandigarh)\b/i;
 
-let creds = { at: 0, app: "", key: "" };
-
-async function getCreds() {
-  if (creds.app && creds.key && Date.now() - creds.at < 6 * 60 * 60 * 1000) return creds;
-  try {
-    const r = await fetch("https://www.ycombinator.com/companies?isHiring=true", { headers: UA });
-    const html = r.ok ? await r.text() : "";
-    const m = html.match(/window\.AlgoliaOpts\s*=\s*\{[^}]*?"app":"([^"]+)"[^}]*?"key":"([^"]+)"/);
-    if (m) creds = { at: Date.now(), app: m[1], key: m[2] };
-  } catch {
-    /* keep any previous creds */
-  }
-  return creds;
-}
+let cache = { at: 0, items: [] };
+const TTL = 6 * 60 * 60 * 1000; // the feed updates ~daily
 
 export async function fromYC() {
-  const { app, key } = await getCreds();
-  if (!app || !key) return [];
-  const body = {
-    requests: [
-      {
-        indexName: INDEX,
-        params:
-          "facetFilters=" +
-          encodeURIComponent('[["isHiring:true"],["regions:India"]]') +
-          "&hitsPerPage=200",
-      },
-    ],
-  };
-  let j;
+  if (cache.items.length && Date.now() - cache.at < TTL) return cache.items;
+  let list = [];
   try {
-    const r = await fetch(
-      `https://${app.toLowerCase()}-dsn.algolia.net/1/indexes/*/queries?x-algolia-application-id=${app}&x-algolia-api-key=${encodeURIComponent(key)}`,
-      { method: "POST", headers: { "content-type": "application/json", ...UA }, body: JSON.stringify(body) },
-    );
-    j = await r.json();
+    const r = await fetch(SRC, { headers: UA });
+    list = r.ok ? await r.json() : [];
   } catch {
-    return [];
+    return cache.items; // keep any previous results on a blip
   }
-  const hits = j?.results?.[0]?.hits || [];
+  if (!Array.isArray(list)) return cache.items;
+
   const out = [];
-  for (const h of hits) {
-    if (!h?.name) continue;
+  for (const h of list) {
+    if (!h?.name || h.isHiring === false) continue;
+    const regions = Array.isArray(h.regions) ? h.regions.join(" ") : "";
+    const india = /india/i.test(regions) || INDIA.test(h.all_locations || "");
+    if (!india) continue;
     if (h.team_size && h.team_size > MAX_TEAM) continue; // keep it to small startups
     const city = (h.all_locations || "").split(";").map((s) => s.trim()).find((s) => /india/i.test(s)) || "India";
     const oneLiner = (h.one_liner || "").slice(0, 70);
@@ -61,17 +38,18 @@ export async function fromYC() {
       company: h.name,
       role: oneLiner ? `Hiring · ${oneLiner}` : "Hiring — multiple roles",
       loc: city,
-      url: h.slug ? `https://www.ycombinator.com/companies/${h.slug}/jobs` : h.website || "#",
+      url: h.slug ? `https://www.ycombinator.com/companies/${h.slug}/jobs` : h.website || h.url || "#",
       source: "yc",
       sourceLabel: `Y Combinator${h.batch ? ` · ${h.batch}` : ""}`,
-      // isHiring is a CURRENT signal — stamp fresh so they aren't sorted out by
-      // the per-track recency cut (launch date would bury them).
+      // isHiring is a CURRENT signal — stamp fresh so the per-track recency cut
+      // doesn't bury these (launch date would).
       posted: new Date().toISOString(),
       companySize: h.team_size ? String(h.team_size) : "",
-      // ensure these match the broad India-tech track so they surface as leads
+      // pad so these match the broad India-tech track and surface as leads
       matchText: `${h.name} ${h.one_liner || ""} software engineering hiring tech roles`,
       india: true,
     });
   }
-  return out;
+  if (out.length) cache = { at: Date.now(), items: out };
+  return cache.items;
 }

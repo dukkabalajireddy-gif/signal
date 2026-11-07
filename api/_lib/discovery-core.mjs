@@ -32,8 +32,6 @@ const SHAPE = `For each, return a JSON object:
 Return ONLY a JSON array of these objects.`;
 
 export const PROMPTS = {
-  gcc: `List 12 to 15 Global Capability Centers (GCCs) or global companies' India offices (captive centers) that hire AI/ML and software engineering talent in India. Prefer ones actively hiring right now.
-${SHAPE}`,
   // BabbleBots.ai's ICP: India-based startups / small-mid companies (NOT big
   // MNCs or GCCs) with ~30–200 people, doing well, hiring tier-1 grads for core
   // tech roles at ₹8 LPA and above.

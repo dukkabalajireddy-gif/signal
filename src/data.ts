@@ -26,7 +26,8 @@ export type Platform =
   | "frontline"
   | "jobalertshub"
   | "gemini"
-  | "serp";
+  | "serp"
+  | "yc";
 export type Lead = "hot" | "warm" | "cold";
 export type Status = "open" | "archived";
 
@@ -89,6 +90,7 @@ export const PLATFORM_META: Record<Platform, { label: string; dot: string }> = {
   jobalertshub: { label: "Job Alerts Hub", dot: "#f0c04a" },
   gemini: { label: "Gemini", dot: "#8ab4f8" },
   serp: { label: "Google Jobs", dot: "#5b8def" },
+  yc: { label: "Y Combinator", dot: "#ff6a00" },
 };
 
 export const LEAD_META: Record<Lead, { label: string; fg: string; bg: string }> = {

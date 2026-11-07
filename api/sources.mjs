@@ -7,6 +7,7 @@
 // (api/signals.js) and the local Vite dev middleware (vite.config.ts).
 
 import { fromSerp } from "./serpjobs.mjs";
+import { fromYC } from "./ycombinator.mjs";
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; SignalBot/0.1)" };
 
@@ -218,10 +219,10 @@ async function pool(items, fn, size = 12) {
 let cache = { at: 0, raw: null };
 async function allRaw(force = false) {
   if (!force && cache.raw && Date.now() - cache.at < 9 * 60000) return cache.raw;
-  const [gh, lv, as, rok, hn, fl, jah, sp] = await Promise.all([
-    pool(GREENHOUSE, fromGreenhouse), pool(LEVER, fromLever), pool(ASHBY, fromAshby), fromRemoteOK(), fromHN(), fromFrontline(), fromJobAlertsHub(), fromSerp(),
+  const [gh, lv, as, rok, hn, fl, jah, sp, yc] = await Promise.all([
+    pool(GREENHOUSE, fromGreenhouse), pool(LEVER, fromLever), pool(ASHBY, fromAshby), fromRemoteOK(), fromHN(), fromFrontline(), fromJobAlertsHub(), fromSerp(), fromYC(),
   ]);
-  cache = { at: Date.now(), raw: [...gh, ...lv, ...as, ...rok, ...hn, ...fl, ...jah, ...sp] };
+  cache = { at: Date.now(), raw: [...gh, ...lv, ...as, ...rok, ...hn, ...fl, ...jah, ...sp, ...yc] };
   return cache.raw;
 }
 
@@ -231,7 +232,7 @@ function leadOf(region, postedMs) {
   return ageDays < 21 ? "warm" : "cold";
 }
 
-const SOURCE_LABEL = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", remoteok: "RemoteOK", hackernews: "Hacker News", frontline: "Frontline Media", jobalertshub: "Job Alerts Hub", serp: "Google Jobs" };
+const SOURCE_LABEL = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", remoteok: "RemoteOK", hackernews: "Hacker News", frontline: "Frontline Media", jobalertshub: "Job Alerts Hub", serp: "Google Jobs", yc: "Y Combinator" };
 
 // Returns listings for one live track, India-first, capped per company.
 export async function getListings(trackId, { limit = 60, perCompany = 5, fresh = false } = {}) {
@@ -255,7 +256,7 @@ export async function getListings(trackId, { limit = 60, perCompany = 5, fresh =
       trackId,
       role: r.role,
       company: pretty(r.company),
-      companySize: "",
+      companySize: r.companySize || "",
       salary: r.salary || "",
       platform: r.source,
       sourceLabel: r.sourceLabel || SOURCE_LABEL[r.source] || r.source,

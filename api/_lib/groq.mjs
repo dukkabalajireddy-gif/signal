@@ -3,7 +3,7 @@
 // Groq runs open models (Llama etc.) via an OpenAI-compatible endpoint with a
 // generous free tier. No web search, so it discovers from model knowledge —
 // same ICP prompts as Gemini, same card shape. Reads GROQ_API_KEY from env.
-import { PROMPTS, extractArray, mapDiscovery } from "./gemini.mjs";
+import { PROMPTS, extractArray, mapDiscovery } from "./discovery-core.mjs";
 
 // Fallback if the models endpoint can't be reached. Model IDs rotate, so we
 // prefer asking Groq which ones exist (see pickModels) over hardcoding.

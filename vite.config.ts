@@ -112,9 +112,9 @@ function localApi(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  // Make .env values (e.g. GEMINI_API_KEY) available to the dev middleware.
+  // Make .env API keys available to the dev middleware.
   const env = loadEnv(mode, process.cwd(), "");
-  for (const k of ["GEMINI_API_KEY", "GROQ_API_KEY", "SERPAPI_KEY", "HUNTER_API_KEY"]) {
+  for (const k of ["GROQ_API_KEY", "SERPAPI_KEY", "HUNTER_API_KEY"]) {
     if (env[k]) process.env[k] = env[k];
   }
   return { plugins: [react(), tailwindcss(), localApi()] };

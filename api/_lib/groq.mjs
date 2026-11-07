@@ -5,7 +5,39 @@
 // same ICP prompts as Gemini, same card shape. Reads GROQ_API_KEY from env.
 import { PROMPTS, extractArray, mapDiscovery } from "./gemini.mjs";
 
-const MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+// Fallback if the models endpoint can't be reached. Model IDs rotate, so we
+// prefer asking Groq which ones exist (see pickModels) over hardcoding.
+const FALLBACK_MODELS = [
+  "llama-3.3-70b-versatile",
+  "meta-llama/llama-4-maverick-17b-128e-instruct",
+  "meta-llama/llama-4-scout-17b-16e-instruct",
+  "llama-3.1-8b-instant",
+];
+
+let modelCache = { at: 0, list: [] };
+
+// Ask Groq which chat models the account can actually use, ranked best-first,
+// so retired/no-access model IDs don't silently break discovery.
+async function pickModels(key) {
+  if (modelCache.list.length && Date.now() - modelCache.at < 60 * 60000) return modelCache.list;
+  let ids = [];
+  try {
+    const r = await fetch("https://api.groq.com/openai/v1/models", {
+      headers: { authorization: `Bearer ${key}` },
+    });
+    const j = await r.json();
+    ids = (j?.data || [])
+      .map((m) => m.id)
+      .filter((id) => /llama|qwen|kimi|gpt-oss|gemma|mixtral/i.test(id) && !/guard|whisper|tts|embed|prompt-guard/i.test(id));
+  } catch {
+    /* fall back below */
+  }
+  const rank = (id) =>
+    /70b|versatile/i.test(id) ? 0 : /maverick/i.test(id) ? 1 : /scout|gpt-oss|qwen|kimi/i.test(id) ? 2 : /instant|8b/i.test(id) ? 3 : 4;
+  const list = (ids.length ? ids : FALLBACK_MODELS).slice().sort((a, b) => rank(a) - rank(b));
+  modelCache = { at: Date.now(), list };
+  return list;
+}
 
 function apiKey() {
   const direct = process.env.GROQ_API_KEY || process.env.Groq_signal || process.env.GROQ_KEY;
@@ -47,6 +79,7 @@ export async function discoverGroq(type, fresh = false) {
   const prompt = (PROMPTS[type] || PROMPTS.gcc) + "\nReturn ONLY the JSON array, no prose.";
   if (!fresh && cache[type] && Date.now() - cache[type].at < 60 * 60000) return cache[type].data;
 
+  const MODELS = await pickModels(key);
   const errors = [];
   let arr = null;
   for (const model of MODELS) {

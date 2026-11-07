@@ -8,7 +8,14 @@ import { PROMPTS, extractArray, mapDiscovery } from "./gemini.mjs";
 const MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
 function apiKey() {
-  return process.env.GROQ_API_KEY || process.env.Groq_signal || process.env.GROQ_KEY || "";
+  const direct = process.env.GROQ_API_KEY || process.env.Groq_signal || process.env.GROQ_KEY;
+  if (direct) return direct;
+  // Robust fallback: pick up the key whatever it was named in Vercel, as long
+  // as the var name contains "groq" (case-insensitive). Avoids casing traps.
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v && /groq/i.test(k)) return v;
+  }
+  return "";
 }
 
 export function groqConfigured() {

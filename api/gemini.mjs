@@ -48,13 +48,21 @@ function extractArray(text) {
 }
 
 const SHAPE = `For each, return a JSON object:
-{"company": string, "city": string (an Indian city where they hire), "role": string (a representative AI/ML or software role), "careersUrl": string (their India careers/jobs page URL), "contact": string (a PUBLIC talent-acquisition / founder / recruiter email or page URL if known, else "")}
+{"company": string, "city": string (an Indian city where they hire), "role": string (a representative role they are hiring for), "size": string (approx headcount band, e.g. "80–150"), "package": string (approx annual CTC range in INR for 2–5 yrs experience, e.g. "₹12–25 LPA"), "careersUrl": string (their India careers/jobs page URL), "contact": string (a PUBLIC talent-acquisition / founder / recruiter email or page URL if known, else "")}
 Return ONLY a JSON array of these objects.`;
 
 const PROMPTS = {
   gcc: `List 12 to 15 Global Capability Centers (GCCs) or global companies' India offices (captive centers) that hire AI/ML and software engineering talent in India. Prefer ones actively hiring right now.
 ${SHAPE}`,
-  startup: `List 12 to 15 EARLY-STAGE STARTUPS in India (roughly 20 to 50 employees, seed to Series A) that are actively hiring software / AI engineering talent and would likely be open to hiring fresh tier-1 college graduates (IIT, NIT, BITS, Manipal). Prefer well-known, recently funded Indian startups.
+  // BabbleBots.ai's ICP: India-based startups / small-mid companies (NOT big
+  // MNCs or GCCs) with ~30–200 people, doing well, hiring tier-1 grads for core
+  // tech roles at ₹8 LPA and above.
+  startup: `List 12 to 15 INDIAN startups or small/mid companies that are ACTIVELY HIRING and fit this EXACT profile:
+- Headquartered in India (any city — Bangalore, Hyderabad, Pune, Delhi NCR, Chennai, Mumbai, Ahmedabad, Kochi, Jaipur, etc.). An Indian company — NOT a global MNC, NOT an IT-services giant, NOT a GCC / captive center.
+- Roughly 30 to 200 employees (early to growth stage, seed to Series B). Prefer startups that are clearly doing well — recently funded, or revenue-generating and growing.
+- Hiring for roles like Full Stack Engineer, Backend Engineer, Front-end Engineer, AI Engineer, AI Product Manager / AI Product Developer, Forward Deployed Engineer, or Software Engineering Intern.
+- Able to offer competitive pay for 2–5 years of experience: roughly ₹8 LPA and above, up to ₹30–40 LPA for strong candidates.
+STRICTLY EXCLUDE large enterprises, unicorns over ~1000 people, IT-services firms, and GCCs (e.g. Databricks, IBM, Cognizant, Infosys, TCS, Wipro, Accenture, Capgemini, Oracle). Prefer genuinely small, recently-funded Indian startups that hire fresh tier-1 (IIT/NIT/BITS/Manipal) talent.
 ${SHAPE}`,
 };
 
@@ -127,10 +135,10 @@ export async function discover(type, fresh = false) {
     trackId: type,
     role: x.role || "AI / Software roles",
     company: x.company || (type === "startup" ? "Startup" : "GCC"),
-    companySize: type === "startup" ? "~20–50" : "",
-    salary: "",
+    companySize: x.size || (type === "startup" ? "~30–200" : ""),
+    salary: x.package || "",
     platform: "gemini",
-    sourceLabel: "Gemini · grounded",
+    sourceLabel: "Gemini · discovery",
     url: x.careersUrl || "#",
     location: "India" + (x.city ? ` · ${x.city}` : ""),
     contact: x.contact || "",

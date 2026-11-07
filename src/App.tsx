@@ -656,7 +656,7 @@ function TrackDetail({
       <p className="mt-1 text-sm text-muted">
         {isGemini
           ? isStartup
-            ? "Early-stage Indian startups (~20–50 people) hiring — a fit for fresh tier-1 talent, discovered via Gemini. Verify via the careers link."
+            ? "Indian startups (~30–200 people, ₹8 LPA+) hiring core tech roles — your ICP, not big MNCs. Discovered via Gemini; verify via the careers link."
             : "Global capability centers hiring in India, discovered via Gemini — verify each through its careers link."
           : live
             ? "Real openings pulled from job boards & communities — India-based or remote."

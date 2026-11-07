@@ -194,8 +194,8 @@ function Sidebar({
       </div>
 
       <nav className="mt-7 space-y-1">
-        <NavItem icon="📡" label="Client Signals" active={nav === "signals"} badge={totalNew || undefined} onClick={() => setNav("signals")} />
-        <NavItem icon="🏢" label="Companies 5+" active={nav === "companies"} onClick={() => setNav("companies")} />
+        <NavItem icon="🏢" label="Companies" active={nav === "companies"} onClick={() => setNav("companies")} />
+        <NavItem icon="📡" label="Tracks" active={nav === "signals"} badge={totalNew || undefined} onClick={() => setNav("signals")} />
         <NavItem icon="▦" label="Pipeline" active={nav === "pipeline"} badge={pipelineCount || undefined} onClick={() => setNav("pipeline")} />
         <NavItem icon="✦" label="Insights" active={nav === "insights"} onClick={() => setNav("insights")} />
       </nav>
@@ -1117,13 +1117,22 @@ function CompaniesView({
   onEnrich,
   enrich,
   contacts,
+  onRefresh,
+  refreshing,
+  lastFetched,
+  onOpenTracks,
 }: {
   listings: Listing[];
   remoteOn: boolean;
   onEnrich: (name: string) => void;
   enrich: Record<string, EnrichState>;
   contacts: Record<string, string>;
+  onRefresh: () => void;
+  refreshing: boolean;
+  lastFetched: number | null;
+  onOpenTracks: () => void;
 }) {
+  const [minRoles, setMinRoles] = useState(1);
   const companies = useMemo(() => {
     const m = new Map<
       string,
@@ -1157,37 +1166,65 @@ function CompaniesView({
           sources: [...e.srcSet],
         }),
       )
-      .filter((e) => e.count >= MIN_COMPANY_ROLES)
       .sort((a, b) => b.count - a.count);
   }, [listings, remoteOn]);
 
-  const totalRoles = companies.reduce((s, c) => s + c.count, 0);
+  const shown = companies.filter((c) => c.count >= minRoles);
+  const totalRoles = shown.reduce((s, c) => s + c.count, 0);
+  const options: [string, number][] = [["All", 1], ["2+", 2], ["5+", MIN_COMPANY_ROLES]];
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8 lg:px-10">
-      <div className="text-[11px] font-semibold uppercase tracking-widest text-lime">
-        <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-lime align-middle" />
-        Target accounts · India
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-widest text-lime">
+            <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-lime align-middle" />
+            Target accounts · India
+          </div>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Companies</h1>
+          <p className="mt-1.5 max-w-2xl text-sm text-muted">
+            Every company hiring right now, grouped from all live sources & discovery — your transposed lead list.
+            Smaller Indian firms included, not just the big MNCs.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onOpenTracks}
+            className="shrink-0 rounded-xl border border-line px-3 py-2 text-sm text-muted transition-colors hover:border-lime/50 hover:text-text"
+          >
+            Tracks →
+          </button>
+          <RefreshButton onClick={onRefresh} refreshing={refreshing} lastFetched={lastFetched} />
+        </div>
       </div>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">Companies hiring 5+</h1>
-      <p className="mt-1.5 max-w-2xl text-sm text-muted">
-        Companies with {MIN_COMPANY_ROLES}+ open technical (or affiliated) roles right now — the transpose of Client
-        Signals, grouped by company instead of by role. The hottest accounts to pitch BabbleBots.ai.
-      </p>
 
-      {companies.length === 0 ? (
+      <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-faint">Min open roles:</span>
+        {options.map(([label, v]) => (
+          <button
+            key={label}
+            onClick={() => setMinRoles(v)}
+            className={`rounded-full px-3 py-1 font-medium transition-colors ${
+              minRoles === v ? "bg-lime text-ink" : "border border-line text-muted hover:text-text"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {shown.length === 0 ? (
         <div className="mt-7 rounded-2xl border border-dashed border-line px-6 py-16 text-center text-sm text-muted">
-          No company has {MIN_COMPANY_ROLES}+ open roles in the current signal pool yet. Open Client Signals to load more
-          signals, then come back.
+          No companies match yet. Lower the filter, or hit Refresh to pull fresh signals & discovery.
         </div>
       ) : (
         <>
           <div className="mt-6 flex flex-wrap gap-3">
-            <InsightStat n={companies.length} label={`Companies with ${MIN_COMPANY_ROLES}+`} hot />
+            <InsightStat n={shown.length} label="Companies hiring" hot />
             <InsightStat n={totalRoles} label="Open roles across them" />
           </div>
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {companies.map((c) => (
+            {shown.map((c) => (
               <CompanyCard key={c.name} c={c} onEnrich={onEnrich} enrich={enrich[c.name]} contact={contacts[c.name]} />
             ))}
           </div>
@@ -1198,7 +1235,7 @@ function CompaniesView({
 }
 
 export default function App() {
-  const [nav, setNav] = useState<Nav>("signals");
+  const [nav, setNav] = useState<Nav>("companies");
   const [activeTrack, setActiveTrack] = useState<string | null>(null);
 
   // Persisted archive (full items) + delete (ids), so reloads keep decisions.
@@ -1293,15 +1330,15 @@ export default function App() {
       })
       .catch(() => setLiveState((s) => ({ ...s, [id]: "error" })));
   };
-  // Grid "Refresh" re-scrapes the keyless tracks. Gemini tracks refresh on
-  // their own page (their Refresh button) so a grid refresh can't drain quota.
-  const refreshAll = () =>
-    LIVE_TRACK_IDS.filter((id) => !isGeminiTrack(id)).forEach((id) => loadTrack(id, true));
+  // Refresh re-pulls every live track, INCLUDING discovery (gcc/startup) so the
+  // Companies view fills with discovered Indian firms, not just the scraped
+  // boards. Discovery runs on Groq (free) with a 1h server cache.
+  const refreshAll = () => LIVE_TRACK_IDS.forEach((id) => loadTrack(id, true));
 
-  // Initial load of the keyless live tracks only. Gemini tracks (gcc/startup)
-  // load lazily on open to conserve the free-tier quota.
+  // Initial load of all live tracks, discovery included, so the Companies
+  // landing page is populated from every source on first paint.
   useEffect(() => {
-    LIVE_TRACK_IDS.filter((id) => !isGeminiTrack(id)).forEach((id) => loadTrack(id));
+    LIVE_TRACK_IDS.forEach((id) => loadTrack(id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1483,6 +1520,10 @@ export default function App() {
             onEnrich={enrichCompany}
             enrich={companyEnrich}
             contacts={companyContact}
+            onRefresh={refreshAll}
+            refreshing={Object.values(liveState).some((v) => v === "loading")}
+            lastFetched={lastFetched}
+            onOpenTracks={() => setNav("signals")}
           />
         ) : nav === "insights" ? (
           <InsightsView listings={listings} pipeline={pipeline} archived={archived} />

@@ -40,7 +40,7 @@ function saveJSON(key: string, val: unknown) {
   }
 }
 
-type Nav = "signals" | "pipeline" | "insights";
+type Nav = "signals" | "companies" | "pipeline" | "insights";
 type StatusTab = "open" | "archived";
 // Per-listing contact-lookup state (Hunter). Absent = not yet tried.
 type EnrichState = "loading" | "error" | "none" | "unconfigured";
@@ -195,6 +195,7 @@ function Sidebar({
 
       <nav className="mt-7 space-y-1">
         <NavItem icon="📡" label="Client Signals" active={nav === "signals"} badge={totalNew || undefined} onClick={() => setNav("signals")} />
+        <NavItem icon="🏢" label="Companies 5+" active={nav === "companies"} onClick={() => setNav("companies")} />
         <NavItem icon="▦" label="Pipeline" active={nav === "pipeline"} badge={pipelineCount || undefined} onClick={() => setNav("pipeline")} />
         <NavItem icon="✦" label="Insights" active={nav === "insights"} onClick={() => setNav("insights")} />
       </nav>
@@ -322,6 +323,7 @@ function TracksGrid({
   lastFetched,
   remoteOn,
   onToggleRemote,
+  onOpenCompanies,
 }: {
   listings: Listing[];
   liveState: LiveState;
@@ -331,6 +333,7 @@ function TracksGrid({
   lastFetched: number | null;
   remoteOn: boolean;
   onToggleRemote: () => void;
+  onOpenCompanies: () => void;
 }) {
   const stats = useMemo(() => {
     const m = new Map<string, { open: number; neu: number; sources: Set<Platform>; last: number }>();
@@ -367,7 +370,23 @@ function TracksGrid({
         </div>
       </div>
 
-      <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <button
+        onClick={onOpenCompanies}
+        className="group mt-6 flex w-full items-center justify-between gap-3 rounded-2xl border border-lime/30 bg-lime/5 px-5 py-4 text-left transition-colors hover:border-lime/60 hover:bg-lime/10"
+      >
+        <span className="flex items-center gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-lime/15 text-lg">🏢</span>
+          <span>
+            <span className="block text-sm font-semibold text-text">Companies hiring 5+ tech roles</span>
+            <span className="block text-xs text-muted">The transposed view — accounts, not roles. Your hottest leads.</span>
+          </span>
+        </span>
+        <span className="shrink-0 text-sm font-medium text-lime transition-transform group-hover:translate-x-0.5">
+          View companies →
+        </span>
+      </button>
+
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {TRACKS.map((t) => {
           const s = stats.get(t.id)!;
           const live = isLiveTrack(t.id);
@@ -997,6 +1016,187 @@ function InsightsView({
   );
 }
 
+// ─── Screen: Companies (5+ open tech roles) ─────────────────────────────────
+// CEO ask: a transposed view that highlights COMPANIES (not roles) hiring for
+// 5+ technical/affiliated roles. All tracks here are technical or affiliated,
+// so every listing counts toward a company's open-role total.
+interface CompanyAgg {
+  name: string;
+  count: number;
+  roles: string[];
+  locations: string[];
+  sources: Platform[];
+  size: string;
+  lead: Lead;
+}
+
+const MIN_COMPANY_ROLES = 5;
+const leadRank: Record<Lead, number> = { hot: 3, warm: 2, cold: 1 };
+
+function CompanyCard({
+  c,
+  onEnrich,
+  enrich,
+  contact,
+}: {
+  c: CompanyAgg;
+  onEnrich: (name: string) => void;
+  enrich?: EnrichState;
+  contact?: string;
+}) {
+  return (
+    <div className="flex h-full flex-col rounded-2xl border border-line bg-card p-5">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-base font-semibold leading-snug">{c.name}</span>
+        <LeadBadge lead={c.lead} />
+      </div>
+
+      <div className="mt-5 flex items-end justify-between">
+        <div>
+          <div className="font-mono text-3xl font-semibold leading-none text-lime">{c.count}</div>
+          <div className="mt-1 text-xs text-muted">open tech roles</div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {c.sources.slice(0, 5).map((p) => (
+            <span key={p} title={PLATFORM_META[p].label}>
+              <PlatformDot platform={p} />
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+        {c.size && <span>{c.size} employees</span>}
+        {c.size && c.locations.length > 0 && <span className="text-faint">·</span>}
+        <span>{c.locations.slice(0, 2).join(", ")}</span>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {c.roles.slice(0, 5).map((r) => (
+          <span key={r} className="rounded-full border border-line px-2 py-0.5 text-[11px] text-muted">
+            {r}
+          </span>
+        ))}
+        {c.roles.length > 5 && (
+          <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-faint">
+            +{c.roles.length - 5} more
+          </span>
+        )}
+      </div>
+
+      <div className="mt-4 border-t border-line pt-3 text-xs">
+        {contact ? (
+          <div>
+            <span className="text-faint">Contact: </span>
+            <span className="select-all font-medium text-lime">{contact}</span>
+          </div>
+        ) : enrich === "loading" ? (
+          <span className="text-faint">Finding contact…</span>
+        ) : enrich === "unconfigured" ? (
+          <span className="text-faint">Set HUNTER_API_KEY in Vercel to find contacts</span>
+        ) : (
+          <button
+            onClick={() => onEnrich(c.name)}
+            className="text-faint underline-offset-2 transition-colors hover:text-lime hover:underline"
+          >
+            {enrich === "none"
+              ? "No contact found · retry"
+              : enrich === "error"
+                ? "Lookup failed · retry"
+                : "＋ Find contact"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CompaniesView({
+  listings,
+  remoteOn,
+  onEnrich,
+  enrich,
+  contacts,
+}: {
+  listings: Listing[];
+  remoteOn: boolean;
+  onEnrich: (name: string) => void;
+  enrich: Record<string, EnrichState>;
+  contacts: Record<string, string>;
+}) {
+  const companies = useMemo(() => {
+    const m = new Map<
+      string,
+      { name: string; count: number; size: string; lead: Lead; roleSet: Set<string>; locSet: Set<string>; srcSet: Set<Platform> }
+    >();
+    for (const l of listings) {
+      if (l.status !== "open") continue;
+      if (!remoteOn && l.location === "Remote") continue;
+      if (!l.company) continue;
+      let e = m.get(l.company);
+      if (!e) {
+        e = { name: l.company, count: 0, size: "", lead: "cold", roleSet: new Set(), locSet: new Set(), srcSet: new Set() };
+        m.set(l.company, e);
+      }
+      e.count += 1;
+      e.roleSet.add(l.role);
+      if (l.location) e.locSet.add(l.location);
+      e.srcSet.add(l.platform);
+      if (!e.size && l.companySize) e.size = l.companySize;
+      if (leadRank[l.lead] > leadRank[e.lead]) e.lead = l.lead;
+    }
+    return [...m.values()]
+      .map(
+        (e): CompanyAgg => ({
+          name: e.name,
+          count: e.count,
+          size: e.size,
+          lead: e.lead,
+          roles: [...e.roleSet],
+          locations: [...e.locSet],
+          sources: [...e.srcSet],
+        }),
+      )
+      .filter((e) => e.count >= MIN_COMPANY_ROLES)
+      .sort((a, b) => b.count - a.count);
+  }, [listings, remoteOn]);
+
+  const totalRoles = companies.reduce((s, c) => s + c.count, 0);
+
+  return (
+    <div className="mx-auto w-full max-w-5xl px-6 py-8 lg:px-10">
+      <div className="text-[11px] font-semibold uppercase tracking-widest text-lime">
+        <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-lime align-middle" />
+        Target accounts · India
+      </div>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight">Companies hiring 5+</h1>
+      <p className="mt-1.5 max-w-2xl text-sm text-muted">
+        Companies with {MIN_COMPANY_ROLES}+ open technical (or affiliated) roles right now — the transpose of Client
+        Signals, grouped by company instead of by role. The hottest accounts to pitch BabbleBots.ai.
+      </p>
+
+      {companies.length === 0 ? (
+        <div className="mt-7 rounded-2xl border border-dashed border-line px-6 py-16 text-center text-sm text-muted">
+          No company has {MIN_COMPANY_ROLES}+ open roles in the current signal pool yet. Open Client Signals to load more
+          signals, then come back.
+        </div>
+      ) : (
+        <>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <InsightStat n={companies.length} label={`Companies with ${MIN_COMPANY_ROLES}+`} hot />
+            <InsightStat n={totalRoles} label="Open roles across them" />
+          </div>
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {companies.map((c) => (
+              <CompanyCard key={c.name} c={c} onEnrich={onEnrich} enrich={enrich[c.name]} contact={contacts[c.name]} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [nav, setNav] = useState<Nav>("signals");
   const [activeTrack, setActiveTrack] = useState<string | null>(null);
@@ -1187,6 +1387,31 @@ export default function App() {
       .catch(() => setEnrichState((s) => ({ ...s, [l.id]: "error" })));
   };
 
+  // Company-level enrichment for the Companies view (keyed by company name).
+  const [companyEnrich, setCompanyEnrich] = useState<Record<string, EnrichState>>({});
+  const [companyContact, setCompanyContact] = useState<Record<string, string>>({});
+  const enrichCompany = (name: string) => {
+    if (!name || companyEnrich[name] === "loading" || companyContact[name]) return;
+    setCompanyEnrich((s) => ({ ...s, [name]: "loading" }));
+    fetch(`/api/enrich?company=${encodeURIComponent(name)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.configured === false) {
+          setCompanyEnrich((s) => ({ ...s, [name]: "unconfigured" }));
+        } else if (data && data.contact) {
+          setCompanyContact((s) => ({ ...s, [name]: data.contact }));
+          setCompanyEnrich((s) => {
+            const n = { ...s };
+            delete n[name];
+            return n;
+          });
+        } else {
+          setCompanyEnrich((s) => ({ ...s, [name]: data && data.error ? "error" : "none" }));
+        }
+      })
+      .catch(() => setCompanyEnrich((s) => ({ ...s, [name]: "error" })));
+  };
+
   // Shared-store sync: hydrate from the team store on load, push each change.
   const applyServerState = (data: { pipeline?: PipelineItem[]; archived?: Listing[]; deleted?: string[] }) => {
     if (Array.isArray(data.pipeline)) setPipeline(() => data.pipeline as PipelineItem[]);
@@ -1251,6 +1476,14 @@ export default function App() {
             onEnrich={enrichContact}
             enrich={enrichState}
           />
+        ) : nav === "companies" ? (
+          <CompaniesView
+            listings={listings}
+            remoteOn={remoteOn}
+            onEnrich={enrichCompany}
+            enrich={companyEnrich}
+            contacts={companyContact}
+          />
         ) : nav === "insights" ? (
           <InsightsView listings={listings} pipeline={pipeline} archived={archived} />
         ) : track ? (
@@ -1281,6 +1514,7 @@ export default function App() {
             lastFetched={lastFetched}
             remoteOn={remoteOn}
             onToggleRemote={toggleRemote}
+            onOpenCompanies={() => setNav("companies")}
           />
         )}
       </main>

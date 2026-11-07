@@ -86,6 +86,7 @@ const PRETTY = {
   cohere: "Cohere", ramp: "Ramp", vanta: "Vanta", replit: "Replit", writer: "Writer", fireworks: "Fireworks AI",
   linear: "Linear", hex: "Hex", posthog: "PostHog", observeai: "Observe.AI",
   sigmoid: "Sigmoid", zeta: "Zeta", mindtickle: "Mindtickle", atlan: "Atlan",
+  truefoundry: "TrueFoundry", turing: "Turing", sarvam: "Sarvam AI", composio: "Composio",
 };
 const pretty = (s) => PRETTY[s] || s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -101,9 +102,9 @@ const goUrl = (postUrl, company) =>
   `/api/go?u=${encodeURIComponent(postUrl)}${company ? `&c=${encodeURIComponent(company)}` : ""}`;
 
 // ── sources (verified working boards) ────────────────────────────────────────
-const GREENHOUSE = ["databricks", "mongodb", "gitlab", "druva", "groww", "sigmoid", "anthropic", "figma", "scaleai"];
+const GREENHOUSE = ["databricks", "mongodb", "gitlab", "druva", "groww", "sigmoid", "anthropic", "figma", "scaleai", "truefoundry", "observeai", "turing"];
 const LEVER = ["meesho", "cred", "zeta", "mindtickle"];
-const ASHBY = ["harvey", "openai", "cursor", "cognition", "elevenlabs", "notion", "perplexity", "sierra", "langchain", "decagon", "baseten", "cohere", "ramp", "vanta", "replit", "writer", "fireworks", "linear", "hex", "atlan"];
+const ASHBY = ["harvey", "openai", "cursor", "cognition", "elevenlabs", "notion", "perplexity", "sierra", "langchain", "decagon", "baseten", "cohere", "ramp", "vanta", "replit", "writer", "fireworks", "linear", "hex", "atlan", "sarvam", "composio"];
 const FRONTLINE_CAT = 367;
 
 async function fromGreenhouse(token) {

@@ -1,12 +1,12 @@
 // Vercel serverless function: GET /api/discover?type=gcc|startup
-// Gemini-powered discovery. Cached 1h (LLM calls cost quota).
-import { discover } from "./gemini.mjs";
+// LLM-powered discovery (Groq preferred, Gemini fallback). Cached 1h.
+import { discoverAny } from "./discovery.mjs";
 
 export default async function handler(req, res) {
   const type = (req.query?.type || "gcc").toString();
   const fresh = req.query?.fresh != null;
   try {
-    const result = await discover(type, fresh);
+    const result = await discoverAny(type, fresh);
     const cacheable = result.configured && !result.error && (result.listings?.length ?? 0) > 0;
     res.setHeader(
       "Cache-Control",

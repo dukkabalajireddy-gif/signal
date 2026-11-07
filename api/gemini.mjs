@@ -28,7 +28,7 @@ export function geminiConfigured() {
   return !!apiKey();
 }
 
-function extractArray(text) {
+export function extractArray(text) {
   if (!text) return null;
   const tries = [];
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -51,7 +51,7 @@ const SHAPE = `For each, return a JSON object:
 {"company": string, "city": string (an Indian city where they hire), "role": string (a representative role they are hiring for), "size": string (approx headcount band, e.g. "80–150"), "package": string (approx annual CTC range in INR for 2–5 yrs experience, e.g. "₹12–25 LPA"), "careersUrl": string (their India careers/jobs page URL), "contact": string (a PUBLIC talent-acquisition / founder / recruiter email or page URL if known, else "")}
 Return ONLY a JSON array of these objects.`;
 
-const PROMPTS = {
+export const PROMPTS = {
   gcc: `List 12 to 15 Global Capability Centers (GCCs) or global companies' India offices (captive centers) that hire AI/ML and software engineering talent in India. Prefer ones actively hiring right now.
 ${SHAPE}`,
   // BabbleBots.ai's ICP: India-based startups / small-mid companies (NOT big
@@ -130,7 +130,17 @@ export async function discover(type, fresh = false) {
     return { configured: true, listings: [], error: why };
   }
 
-  const listings = arr.map((x, i) => ({
+  const listings = mapDiscovery(type, arr, "Gemini · discovery");
+
+  const result = { configured: true, listings };
+  cache[type] = { at: Date.now(), data: result };
+  return result;
+}
+
+// Shared mapping: discovery JSON objects → frontend Listing shape. Reused by
+// the Groq discovery path so both engines produce identical cards.
+export function mapDiscovery(type, arr, sourceLabel = "Discovery") {
+  return arr.map((x, i) => ({
     id: `${type}-${hash((x.company || "") + (x.role || "") + i)}`,
     trackId: type,
     role: x.role || "AI / Software roles",
@@ -138,7 +148,7 @@ export async function discover(type, fresh = false) {
     companySize: x.size || (type === "startup" ? "~30–200" : ""),
     salary: x.package || "",
     platform: "gemini",
-    sourceLabel: "Gemini · discovery",
+    sourceLabel,
     url: x.careersUrl || "#",
     location: "India" + (x.city ? ` · ${x.city}` : ""),
     contact: x.contact || "",
@@ -147,8 +157,4 @@ export async function discover(type, fresh = false) {
     status: "open",
     viewed: false,
   }));
-
-  const result = { configured: true, listings };
-  cache[type] = { at: Date.now(), data: result };
-  return result;
 }

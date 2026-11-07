@@ -35,10 +35,10 @@ function localApi(): Plugin {
           const url = new URL(req.url ?? "", "http://localhost");
           const type = url.searchParams.get("type") ?? "gcc";
           const fresh = url.searchParams.get("fresh") != null;
-          const mod = (await importApi("gemini.mjs")) as {
-            discover: (t: string, f?: boolean) => Promise<unknown>;
+          const mod = (await importApi("discovery.mjs")) as {
+            discoverAny: (t: string, f?: boolean) => Promise<unknown>;
           };
-          const result = await mod.discover(type, fresh);
+          const result = await mod.discoverAny(type, fresh);
           res.setHeader("content-type", "application/json");
           res.end(JSON.stringify(result));
         } catch (e) {
@@ -114,6 +114,8 @@ function localApi(): Plugin {
 export default defineConfig(({ mode }) => {
   // Make .env values (e.g. GEMINI_API_KEY) available to the dev middleware.
   const env = loadEnv(mode, process.cwd(), "");
-  if (env.GEMINI_API_KEY) process.env.GEMINI_API_KEY = env.GEMINI_API_KEY;
+  for (const k of ["GEMINI_API_KEY", "GROQ_API_KEY", "SERPAPI_KEY", "HUNTER_API_KEY"]) {
+    if (env[k]) process.env[k] = env[k];
+  }
   return { plugins: [react(), tailwindcss(), localApi()] };
 });

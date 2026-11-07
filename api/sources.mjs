@@ -6,6 +6,8 @@
 // the frontend's Listing shape. Used by both the Vercel function
 // (api/signals.js) and the local Vite dev middleware (vite.config.ts).
 
+import { fromSerp } from "./serpjobs.mjs";
+
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; SignalBot/0.1)" };
 
 async function getJSON(url, ms = 11000) {
@@ -215,10 +217,10 @@ async function pool(items, fn, size = 12) {
 let cache = { at: 0, raw: null };
 async function allRaw(force = false) {
   if (!force && cache.raw && Date.now() - cache.at < 9 * 60000) return cache.raw;
-  const [gh, lv, as, rok, hn, fl, jah] = await Promise.all([
-    pool(GREENHOUSE, fromGreenhouse), pool(LEVER, fromLever), pool(ASHBY, fromAshby), fromRemoteOK(), fromHN(), fromFrontline(), fromJobAlertsHub(),
+  const [gh, lv, as, rok, hn, fl, jah, sp] = await Promise.all([
+    pool(GREENHOUSE, fromGreenhouse), pool(LEVER, fromLever), pool(ASHBY, fromAshby), fromRemoteOK(), fromHN(), fromFrontline(), fromJobAlertsHub(), fromSerp(),
   ]);
-  cache = { at: Date.now(), raw: [...gh, ...lv, ...as, ...rok, ...hn, ...fl, ...jah] };
+  cache = { at: Date.now(), raw: [...gh, ...lv, ...as, ...rok, ...hn, ...fl, ...jah, ...sp] };
   return cache.raw;
 }
 
@@ -228,7 +230,7 @@ function leadOf(region, postedMs) {
   return ageDays < 21 ? "warm" : "cold";
 }
 
-const SOURCE_LABEL = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", remoteok: "RemoteOK", hackernews: "Hacker News", frontline: "Frontline Media", jobalertshub: "Job Alerts Hub" };
+const SOURCE_LABEL = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", remoteok: "RemoteOK", hackernews: "Hacker News", frontline: "Frontline Media", jobalertshub: "Job Alerts Hub", serp: "Google Jobs" };
 
 // Returns listings for one live track, India-first, capped per company.
 export async function getListings(trackId, { limit = 60, perCompany = 5, fresh = false } = {}) {
@@ -255,7 +257,7 @@ export async function getListings(trackId, { limit = 60, perCompany = 5, fresh =
       companySize: "",
       salary: r.salary || "",
       platform: r.source,
-      sourceLabel: SOURCE_LABEL[r.source],
+      sourceLabel: r.sourceLabel || SOURCE_LABEL[r.source] || r.source,
       url: r.url || "#",
       location: region === "india" ? "India" : "Remote",
       lead: leadOf(region, postedMs),

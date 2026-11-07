@@ -25,7 +25,8 @@ export type Platform =
   | "hackernews"
   | "frontline"
   | "jobalertshub"
-  | "gemini";
+  | "gemini"
+  | "serp";
 export type Lead = "hot" | "warm" | "cold";
 export type Status = "open" | "archived";
 
@@ -87,6 +88,7 @@ export const PLATFORM_META: Record<Platform, { label: string; dot: string }> = {
   frontline: { label: "Frontline Media", dot: "#ff8a3d" },
   jobalertshub: { label: "Job Alerts Hub", dot: "#f0c04a" },
   gemini: { label: "Gemini", dot: "#8ab4f8" },
+  serp: { label: "Google Jobs", dot: "#5b8def" },
 };
 
 export const LEAD_META: Record<Lead, { label: string; fg: string; bg: string }> = {

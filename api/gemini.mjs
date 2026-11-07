@@ -59,7 +59,7 @@ ${SHAPE}`,
   // tech roles at ₹8 LPA and above.
   startup: `List 12 to 15 INDIAN startups or small/mid companies that are ACTIVELY HIRING and fit this EXACT profile:
 - Headquartered in India (any city — Bangalore, Hyderabad, Pune, Delhi NCR, Chennai, Mumbai, Ahmedabad, Kochi, Jaipur, etc.). An Indian company — NOT a global MNC, NOT an IT-services giant, NOT a GCC / captive center.
-- Roughly 30 to 200 employees (early to growth stage, seed to Series B). Prefer startups that are clearly doing well — recently funded, or revenue-generating and growing.
+- Roughly 30 to 200 employees (early to growth stage, seed to Series B). Prefer startups that are clearly doing well — recently funded, or revenue-generating and growing. Y Combinator / Accel / Sequoia / Blume / Lightspeed / Peak XV-backed Indian startups are great picks.
 - Hiring for roles like Full Stack Engineer, Backend Engineer, Front-end Engineer, AI Engineer, AI Product Manager / AI Product Developer, Forward Deployed Engineer, or Software Engineering Intern.
 - Able to offer competitive pay for 2–5 years of experience: roughly ₹8 LPA and above, up to ₹30–40 LPA for strong candidates.
 STRICTLY EXCLUDE large enterprises, unicorns over ~1000 people, IT-services firms, and GCCs (e.g. Databricks, IBM, Cognizant, Infosys, TCS, Wipro, Accenture, Capgemini, Oracle). Prefer genuinely small, recently-funded Indian startups that hire fresh tier-1 (IIT/NIT/BITS/Manipal) talent.

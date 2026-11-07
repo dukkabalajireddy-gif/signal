@@ -1033,6 +1033,28 @@ interface CompanyAgg {
 const MIN_COMPANY_ROLES = 5;
 const leadRank: Record<Lead, number> = { hot: 3, warm: 2, cold: 1 };
 
+// Big/established companies to hide when "Startups only" is on. Not exhaustive —
+// a pragmatic block of the large names (MNCs, IT-services giants, unicorns) that
+// otherwise dominate the list. The ICP is smaller Indian startups.
+const BIG_COMPANIES = new Set(
+  [
+    "databricks", "gitlab", "mongodb", "vanta", "elevenlabs", "anthropic", "openai", "figma", "scale ai",
+    "notion", "perplexity", "ramp", "cohere", "replit", "writer", "linear", "posthog", "sierra", "baseten",
+    "fireworks ai", "hex", "decagon", "cursor", "cognition", "harvey", "turing", "observe.ai", "langchain",
+    "ibm", "cisco", "hcl tech", "electronic arts", "ge health care", "ge healthcare", "cognizant", "capgemini",
+    "accenture", "infosys", "tcs", "wipro", "oracle", "sap", "microsoft", "google", "amazon", "meta",
+    "honeywell", "caterpillar", "qualcomm", "genpact", "hitachi", "ntt data", "ubs", "yash technologies",
+    "flex", "iqvia", "rubrik", "thermofisher scientific", "harman", "nec", "eaton", "jio", "zycus", "pwc",
+    "deloitte", "kpmg", "razorpay", "zepto", "swiggy", "zomato", "phonepe", "cred", "meesho", "groww",
+    "innovaccer", "fractal", "uniphore", "darwinbox", "postman", "chargebee", "browserstack", "clevertap", "whatfix",
+    "druva", "mindtickle", "zeta", "sigmoid", "gupshup", "netcore", "moengage", "leadsquared", "exotel", "acko",
+    "navi", "slice", "jupiter", "khatabook", "spinny", "cars24", "urban company", "porter", "rapido", "licious",
+  ].map((s) => s.toLowerCase()),
+);
+const bigBySize = (size: string) => /\b(1000|1500|2000|2500|3000|5000|10000)\+?|10,?000/.test(size || "");
+const isBigCompany = (name: string, size: string) =>
+  BIG_COMPANIES.has((name || "").toLowerCase().trim()) || bigBySize(size);
+
 function CompanyCard({
   c,
   onEnrich,
@@ -1133,6 +1155,7 @@ function CompaniesView({
   onOpenTracks: () => void;
 }) {
   const [minRoles, setMinRoles] = useState(1);
+  const [startupsOnly, setStartupsOnly] = useState(true);
   const companies = useMemo(() => {
     const m = new Map<
       string,
@@ -1169,7 +1192,16 @@ function CompaniesView({
       .sort((a, b) => b.count - a.count);
   }, [listings, remoteOn]);
 
-  const shown = companies.filter((c) => c.count >= minRoles);
+  // Frontline / Job Alerts Hub are MNC "freshers, multiple roles" aggregators —
+  // when startups-only is on, drop companies seen ONLY through them.
+  const AGG_ONLY = new Set<Platform>(["frontline", "jobalertshub"]);
+  const shown = companies.filter((c) => {
+    if (c.count < minRoles) return false;
+    if (!startupsOnly) return true;
+    if (isBigCompany(c.name, c.size)) return false;
+    if (c.sources.length > 0 && c.sources.every((s) => AGG_ONLY.has(s))) return false;
+    return true;
+  });
   const totalRoles = shown.reduce((s, c) => s + c.count, 0);
   const options: [string, number][] = [["All", 1], ["2+", 2], ["5+", MIN_COMPANY_ROLES]];
 
@@ -1199,7 +1231,16 @@ function CompaniesView({
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-faint">Min open roles:</span>
+        <button
+          onClick={() => setStartupsOnly((v) => !v)}
+          className={`rounded-full px-3 py-1 font-semibold transition-colors ${
+            startupsOnly ? "bg-lime text-ink" : "border border-line text-muted hover:text-text"
+          }`}
+          title="Hide big MNCs, unicorns and IT-services giants"
+        >
+          {startupsOnly ? "✓ Startups only" : "Startups only"}
+        </button>
+        <span className="ml-2 text-faint">Min open roles:</span>
         {options.map(([label, v]) => (
           <button
             key={label}
@@ -1215,7 +1256,8 @@ function CompaniesView({
 
       {shown.length === 0 ? (
         <div className="mt-7 rounded-2xl border border-dashed border-line px-6 py-16 text-center text-sm text-muted">
-          No companies match yet. Lower the filter, or hit Refresh to pull fresh signals & discovery.
+          No companies match yet. Turn off "Startups only" or lower the filter, or hit Refresh to pull fresh
+          signals & discovery.
         </div>
       ) : (
         <>
